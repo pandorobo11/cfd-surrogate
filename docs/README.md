@@ -18,18 +18,19 @@
 
 ## 環境とデータセットの選定
 
-**現状**：Mac mini（Apple M5 Pro、メモリ24GB）で、AirfRANS を使い Transolver を縮小設定で学習する方針。学習はまだ行っていない。
+**現状**：Mac mini（Apple M5 Pro、メモリ24GB）で、AirfRANS を使い Transolver を縮小設定で学習する方針。MPS で標準ベンチマーク（Elasticity）の論文の値を再現できた。公式の AirfRANS 用の設定で `full` を学習すると25時間以上かかる見込みなので、まず縮小した設定で `scarce` を学習する。AirfRANS での学習はまだ行っていない。
 
 | 本文 | 内容 |
 |---|---|
-| [feasibility.md](setup/feasibility.md) | Mac mini での実現性とデータセットの比較。小規模な候補（Geo-FNO、Deep-Flow-Prediction、ShapeNet-Car、Ratio Labs）の容量と使い分けを含む（10月29日） |
+| [feasibility.md](setup/feasibility.md) | Mac mini での実現性とデータセットの比較。小規模な候補（Geo-FNO、Deep-Flow-Prediction、ShapeNet-Car、Ratio Labs）の容量と使い分けを含む（10月29日）。10月30日に、計測した時間と MPS での動作を反映 |
+| [20261030-airfrans-step-time](reports/20261030-airfrans-step-time/README.md) | 公式の AirfRANS 用の設定の1学習ステップをダミー入力で測り、学習時間を見積もった。`full` は25時間以上、隠れ次元128・4層の `scarce` は約1.7時間（10月30日） |
 
 ## 表面場の予測
 
-**現状**：AirfRANS の翼表面の点だけで Cp と Cf を予測し、積分した Cl・Cd を CFD と比べる計画を立てた。比較用の簡単なモデル、スライスの可視化、体積場も学習させた場合との比較も計画に入れた。環境の検証として、標準ベンチマークで論文の値を再現する計画も立てた。どれもまだ実行していない。表面だけの予測は論文の数値とは比較できない独自の設定。
+**現状**：AirfRANS の翼表面の点だけで Cp と Cf を予測し、積分した Cl・Cd を CFD と比べる計画を立てた。比較用の簡単なモデル、スライスの可視化、体積場も学習させた場合との比較も計画に入れた。環境の検証として、標準ベンチマークで論文の値を再現する計画も立てた。標準ベンチマークでは、Elasticity で論文の値（相対L2 0.0064）に対し 0.00605 を得て、MPS の環境に大きな問題がないことを確かめた（学習1回、CPU に逃がした演算なし）。Airfoil は試走だけで見送った。表面だけの予測は論文の数値とは比較できない独自の設定。
 
 | 記録 | 内容 |
 |---|---|
-| [20261029-standard-benchmark-repro](reports/20261029-standard-benchmark-repro/README.md) | Airfoil と Elasticity で論文の値を再現し、MPS の環境を検証する計画（10月29日、未実行） |
+| [20261029-standard-benchmark-repro](reports/20261029-standard-benchmark-repro/README.md) | Airfoil と Elasticity で論文の値を再現し、MPS の環境を検証する計画。10月30日に Elasticity を500エポック学習し、相対L2 0.00605（論文 0.0064）。Airfoil は試走だけで、500エポックで約17時間かかる見込みのため見送り |
 | [20261029-surface-cp-cf](reports/20261029-surface-cp-cf/README.md) | 表面だけの Cp・Cf 予測と比較用モデル、スライスの可視化の計画（10月29日、未実行） |
 | [20261029-volume-vs-surface](reports/20261029-volume-vs-surface/README.md) | 体積場も学習させた公式コードと、表面だけのモデルの表面の精度を比べる計画（10月29日、未実行） |
