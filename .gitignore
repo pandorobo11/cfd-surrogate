@@ -1,0 +1,44 @@
+# Local datasets, training outputs, upstream clones, and machine-specific settings
+/data/
+/results/
+/external/
+/local/
+
+# Secrets, local environment, and OS/editor state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+.vscode/
+.idea/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Model checkpoints, logs, and raw simulation or array files
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.log
+runs/
+wandb/
+lightning_logs/
+*.vtk
+*.vtu
+*.vtp
+*.pvtu
+*.cgns
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.pkl
+*.csv
+*.zip
+*.tar
+*.gz
