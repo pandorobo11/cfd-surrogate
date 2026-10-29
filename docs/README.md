@@ -23,3 +23,11 @@
 | 本文 | 内容 |
 |---|---|
 | [feasibility.md](setup/feasibility.md) | Mac mini での実現性とデータセットの比較（10月29日） |
+
+## 表面場の予測
+
+**現状**：AirfRANS の翼表面の点だけで Cp と Cf を予測し、積分した Cl・Cd を CFD と比べる計画を立てた。まだ実行していない。論文の数値とは比較できない独自の設定。
+
+| 記録 | 内容 |
+|---|---|
+| [20261029-surface-cp-cf](reports/20261029-surface-cp-cf/README.md) | 表面だけの Cp・Cf 予測の計画（10月29日、未実行） |
