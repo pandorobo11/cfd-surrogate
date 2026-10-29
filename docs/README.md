@@ -26,8 +26,10 @@
 
 ## 表面場の予測
 
-**現状**：AirfRANS の翼表面の点だけで Cp と Cf を予測し、積分した Cl・Cd を CFD と比べる計画を立てた。まだ実行していない。論文の数値とは比較できない独自の設定。
+**現状**：AirfRANS の翼表面の点だけで Cp と Cf を予測し、積分した Cl・Cd を CFD と比べる計画を立てた。比較用の簡単なモデル、スライスの可視化、体積場も学習させた場合との比較も計画に入れた。環境の検証として、標準ベンチマークで論文の値を再現する計画も立てた。どれもまだ実行していない。表面だけの予測は論文の数値とは比較できない独自の設定。
 
 | 記録 | 内容 |
 |---|---|
-| [20261029-surface-cp-cf](reports/20261029-surface-cp-cf/README.md) | 表面だけの Cp・Cf 予測の計画（10月29日、未実行） |
+| [20261029-standard-benchmark-repro](reports/20261029-standard-benchmark-repro/README.md) | Airfoil と Elasticity で論文の値を再現し、MPS の環境を検証する計画（10月29日、未実行） |
+| [20261029-surface-cp-cf](reports/20261029-surface-cp-cf/README.md) | 表面だけの Cp・Cf 予測と比較用モデル、スライスの可視化の計画（10月29日、未実行） |
+| [20261029-volume-vs-surface](reports/20261029-volume-vs-surface/README.md) | 体積場も学習させた公式コードと、表面だけのモデルの表面の精度を比べる計画（10月29日、未実行） |
