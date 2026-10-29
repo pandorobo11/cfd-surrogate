@@ -22,7 +22,7 @@
 
 | 本文 | 内容 |
 |---|---|
-| [feasibility.md](setup/feasibility.md) | Mac mini での実現性とデータセットの比較（10月29日） |
+| [feasibility.md](setup/feasibility.md) | Mac mini での実現性とデータセットの比較。小規模な候補（Geo-FNO、Deep-Flow-Prediction、ShapeNet-Car、Ratio Labs）の容量と使い分けを含む（10月29日） |
 
 ## 表面場の予測
 

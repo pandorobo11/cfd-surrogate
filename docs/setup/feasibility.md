@@ -45,16 +45,28 @@
 
 ### その他の候補
 
-| データセット | 向いている用途 |
-|---|---|
-| Geo-FNO の Airfoil（Transolver の標準ベンチマーク） | 小さい構造格子で軽い。遷音速 Euler だが流れ条件は固定。パイプライン確認向き |
-| ShapeNet-Car（Transolver 論文で使用） | 3次元の車形状。流れ条件は固定 |
-| DrivAerNet++ など | 3次元・大規模。Mac mini では厳しい |
+10月29日に、取得元のページ、README、ダウンロード元の応答ヘッダで容量と中身を確認した。ライセンスと中身の細部は、使うときに取得元で改めて確認する。
+
+| データセット | 容量 | 中身 | 向いている用途 | 注意点 | 取得元・ライセンス |
+|---|---|---|---|---|---|
+| Geo-FNO の Airfoil | 未確認（小さい見込み） | 遷音速 Euler 流れ。翼型の形状から周りのマッハ数の場を予測。構造格子 221×51（11,271点）。学習1000、テスト200 | 環境の検証。論文の値（相対L2誤差 0.0053）と比べられる | 流れの条件（マッハ数、迎角）が固定 | Transolver の `PDE-Solving-StandardBenchmark/README.md` が示す Google Drive。ライセンス未確認 |
+| Geo-FNO の Elasticity | 未確認（小さい見込み） | 弾性体の内部応力。点群972点。学習1000、テスト200 | 不規則な点群用のモデルの動作確認。論文の値は 0.0064 | 流体ではない | 同上 |
+| Deep-Flow-Prediction（Thuerey ら） | 6.4k ケース版が約1.2GB、全53.8k ケース版が約10GB（README の記載） | 2次元 RANS。UIUC の翼型データベース（1498形状）を使い、一様流の速度の向きと大きさも変える。128×128 の格子で、入力は一様流の速度2成分と翼のマスク、出力は p・u・v | 形状と流れの条件を変えた場の予測を小さな容量で試せる。NACA 系以外の形状も入っている | 翼を直交格子上のマスクで表すので、境界層は解像されない。Cf は求められず、Cl・Cd の積分精度も低い | `https://github.com/thunil/Deep-Flow-Prediction`（コードは Apache-2.0）。データは mediaTUM、ライセンス未確認 |
+| ShapeNet-Car（Transolver 論文で使用） | zip が 2,029,047,879 バイト（約2.0GB） | 3次元の車。車体表面の圧力と周りの速度、抗力係数 | 表面の量を予測する課題の3次元版。Transolver の公式コードがある | 流れの条件は固定。PyTorch Geometric が必要 | `http://www.nobuyuki-umetani.com/publication/mlcfd_data.zip`。ライセンス未確認 |
+| Ratio Labs downforce-airfoils | 全体で約423GB（学習用が約338GB、1ケース約49MB）。ケースごとの Cl・Cd の一覧は小さな parquet | 2次元の非圧縮 RANS（k-ω SST、OpenFOAM）。逆キャンバーの NACA 4桁系 907形状 × 迎角 −10°〜0° の11通り、計9,977ケース。体積場（約27.6万セル）、ソルバーが出力した表面の Cp・Cf など（約410パネル）、Cl・Cd・Cm | 一部のケースだけを落として、AirfRANS で後から求めた Cf の作り方を確かめる材料にできる。Cl・Cd の一覧はパラメータ回帰にすぐ使える | レイノルズ数 4.66×10⁶、マッハ数 0.2 で固定。2026年10月公開で、論文はプレプリント（arXiv 2609.38213） | Hugging Face `ratiolabs/downforce-airfoils`。CC BY 4.0 |
+| DrivAerNet++ など | 大規模 | 3次元の車 | — | Mac mini では厳しい | — |
+
+使い分けの見込み：
+
+- 環境の検証には Geo-FNO の Airfoil と Elasticity を使う（[再現の計画](../reports/20261029-standard-benchmark-repro/README.md)）。
+- 形状と流れの条件を変えた場の予測に小さな容量で慣れるなら、Deep-Flow-Prediction の 6.4k ケース版が一番合う。ただし表面の量は扱えないので、AirfRANS の表面の計画の代わりにはならない。
+- Cf の正解の作り方を確かめるには、Ratio Labs のデータの一部を使える。
+- 3次元に進むときは ShapeNet-Car から始める。
 
 ## 次の手順
 
 1. `external/` に Transolver 公式リポジトリを clone し、`Airfoil-Design-AirfRANS` のデバイス指定を MPS に書き換える。
-2. `airfrans` パッケージで `data/` にデータをダウンロードして前処理する（生データは VTK 形式、全体で数GB〜10GB程度）。
+2. `airfrans` パッケージで `data/` にデータをダウンロードして前処理する（生データは VTK 形式。zip は約10.0GBで、10月29日に確認）。
 3. 縮小設定で `scarce` タスクを学習し、表面圧力から求めた揚力・抗力係数を CFD 値と比較する。
 4. 結果を見て `full` タスクや外挿タスクに広げる。
 
@@ -62,4 +74,4 @@
 
 - MPS で全演算がフォールバックなしに動くか。
 - 1エポックあたりの実時間とピークメモリ。
-- AirfRANS の正確なダウンロード容量とライセンス条件（取得時に確認して記録する）。
+- AirfRANS のライセンス条件（取得時に確認して記録する）。
