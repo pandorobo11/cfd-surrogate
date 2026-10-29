@@ -29,6 +29,8 @@ Mac mini（Apple M5 Pro、メモリ24GB、PyTorch MPS）で Transolver の扱い
 | `airfrans` ライブラリ | PyPI `airfrans`（ソースは `https://github.com/Extrality/airfrans_lib`） | 0.1.5.1 | GitHub の判定は MIT、README は ODbL-1.0 と記載 |
 | AirfRANS データセット | `https://data.isir.upmc.fr/extrality/NeurIPS_2022/Dataset.zip`（`airfrans.dataset.download(root, OpenFOAM=False)` が使う URL） | 取得時に記録 | 取得時に確認して記録する（ODbL-1.0 の見込み） |
 
+データセットの zip は 10,029,067,577 バイト（約10.0GB。2026-10-29 にダウンロード元の応答ヘッダで確認）。展開後はさらに大きくなる。
+
 置き場所: リポジトリは `external/Transolver/`、データセットは `data/airfrans/`。どちらも Git 管理外。
 
 ## 正解値の作り方
