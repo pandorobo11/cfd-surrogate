@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01・SURF-02 は実行済み（2026-10-30）。SURF-03〜12 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01・SURF-02・SURF-06 は実行済み（2026-10-30）。ほかは未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -90,7 +90,8 @@ Transolver の大きさとエポック数は公式の AirfRANS 設定（層数8�
 | 実行ID | 状態 | モデル | タスク | 学習ケース数 | 層数 | 隠れ次元 | スライス数 | エポック数 | 開始 |
 |---|---|---|---|---|---|---|---|---|---|
 | SURF-01 | 学習と評価が完了 | Transolver | `scarce` | 180（200 から公式どおり1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 20:04 |
-| SURF-02 | 学習と評価が完了 | Transolver | `full` | 720（800 から1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 22:25 |
+| SURF-02 | 学習と評価が完了 | Transolver | `full` | 720（800 から1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 22:19 |
+| SURF-06 | 学習と評価が完了 | 点ごとの MLP | `full` | 720（同上） | 5（隠れ層） | 490 | — | 200 | 2026-10-30 23:14 |
 
 共通の条件は上の表のとおり。`unified_pos` は公式と同じ1にした（正規化前の座標から格子までの距離を特徴に加える）。乱数の種は0。テストは `full_test` の200ケース、表面の全点。
 
@@ -207,6 +208,54 @@ Cp の相対L2誤差が最小・中央・最大のテストケース（破線が
 
 時間とメモリ（SURF-02）: 1エポック平均14.8秒、学習全体 2,961秒（約49分）、評価 2.0秒、MPS が確保したメモリ 0.18 GiB、プロセスのピークメモリ 2.8 GB、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定。前処理は `full_train` の残り600ケースに229秒かかった。全1000ケースで学習前の確認2をやり直し、最大相対差は 1.7e-13 だった。
 
+### SURF-06 の結果（点ごとの MLP）
+
+SURF-02 と同じデータ、正規化、損失、最適化（Adam、OneCycleLR、200エポック、乱数の種0）で、Transolver の代わりに点ごとの MLP を学習した。MLP は各点の入力6成分（位置、一様流の速度、法線）だけから、その点の Cp・Cf を予測する。翼のほかの点の情報は使わない。隠れ層の幅490・5層・GELU で、パラメータ数は 966,772（SURF-02 の Transolver は 967,754）。コードは [PR #2](https://github.com/pandorobo11/transolver/pull/2)（commit `564cce8`）の `--model mlp`。値は [SURF-06-metrics.json](SURF-06-metrics.json)。**表面のみの独自の設定で、論文の数値とは比較できない。**
+
+| 指標（中央値。括弧内は平均） | SURF-02（Transolver） | SURF-06（点ごとの MLP） |
+|---|---|---|
+| Cp の相対L2誤差 | 0.049（0.055） | 0.335（0.383） |
+| Cf の相対L2誤差 | 0.051（0.056） | 0.349（0.395） |
+| Cl の相対誤差 | 0.033（0.074） | 0.065（0.154） |
+| Cd の相対誤差 | 0.191（0.304） | 0.570（0.703） |
+| Cd の圧力成分の相対誤差 | 0.634（0.845） | 1.76（2.05） |
+| Cd の摩擦成分の相対誤差 | 0.014（0.018） | 0.017（0.027） |
+| Cl の順位相関 | 0.999 | 0.994 |
+| Cd の順位相関 | 0.470 | 0.067 |
+
+前縁の近くを除いた誤差（[le_error_split.py](le_error_split.py) で、保存したモデルからテスト200ケースを予測し直して計算。前縁の近く = x が翼の最小の x から翼弦の2%以内の点）:
+
+| 相対L2誤差（中央値） | SURF-02（Transolver） | SURF-06（点ごとの MLP） |
+|---|---|---|
+| Cp、全点 | 0.049 | 0.335 |
+| Cp、前縁の近くを除く | 0.068 | 0.111 |
+| Cf、全点 | 0.051 | 0.349 |
+| Cf、前縁の近くを除く | 0.060 | 0.073 |
+| Cp の誤差の二乗和のうち、前縁の近くの点が占める割合 | 48% | 97% |
+
+わかったこと:
+
+- 同じパラメータ数で、Transolver は点ごとの MLP より、すべての指標で誤差が小さい。Cl の誤差は約半分、Cd の誤差は約3分の1。
+- 差の大部分は前縁の近くで生じている。MLP は前縁の負圧のピークを大きく外し（代表ケースでは CFD の Cp −5〜−10 に対し約 −20）、Cp の誤差の97%が前縁の近く（翼弦の2%）の点に集まる。前縁の近くを除くと、MLP の Cp の誤差は Transolver の約1.6倍、Cf は約1.2倍まで縮まる。前縁の負圧のピークの高さは翼全体の形と迎角で決まるので、点どうしの情報のやり取りがない MLP では予測しにくいと見込む。
+- MLP は過学習している。検証の MSE はエポック50の Cp 0.147、Cf 0.155 が最小で、その後は上がり、最後は Cp 0.234、Cf 0.194 になった（学習の損失は 0.048 まで下がる）。早めに止めても、検証の MSE は Transolver の最後の値（Cp 0.0023、Cf 0.0061）より数十倍大きい。
+- 学習1回ずつの比較で、乱数による揺れはまだ見ていない。
+
+学習の途中の検証の MSE（正規化後、検証80ケース）:
+
+| エポック | 学習の損失 | 検証 Cp | 検証 Cf |
+|---|---|---|---|
+| 1 | 0.586 | 0.362 | 0.317 |
+| 50 | 0.228 | 0.147 | 0.155 |
+| 100 | 0.172 | 0.161 | 0.152 |
+| 150 | 0.102 | 0.217 | 0.174 |
+| 200 | 0.0484 | 0.234 | 0.194 |
+
+Cp の相対L2誤差が最小・中央・最大のテストケース（破線が予測）:
+
+![SURF-06 の代表3ケース](SURF-06-cases.png)
+
+時間とメモリ（SURF-06）: 1エポック平均2.2秒、学習全体 449秒（約7.5分）、評価 1.1秒、MPS が確保したメモリ 0.055 GiB、プロセスのピークメモリ 1.4 GB、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定。
+
 ## 評価
 
 | 指標 | 内容 |
@@ -260,6 +309,13 @@ caffeinate -i $PY -m surfcpcf.train --task full --surface data/airfrans_surface 
   --n-hidden 128 --n-layers 5 --slice-num 32 --epochs 200 --lr 1e-3 --seed 0 --val-every 10
 $PY -m surfcpcf.evaluate --run results/surface/SURF-02 --surface data/airfrans_surface \
   --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
+# SURF-06: PR #2 の --model mlp を使う
+caffeinate -i $PY -m surfcpcf.train --task full --model mlp --n-hidden 490 --n-layers 5 \
+  --surface data/airfrans_surface --out results/surface/SURF-06 --epochs 200 --lr 1e-3 --seed 0 --val-every 10
+$PY -m surfcpcf.evaluate --run results/surface/SURF-06 --surface data/airfrans_surface
+# 前縁の近くを除いた誤差
+$PY docs/reports/20261029-surface-cp-cf/le_error_split.py data/airfrans_surface \
+  external/Transolver/Airfoil-Design-AirfRANS results/surface/SURF-02 results/surface/SURF-06
 ```
 
 実装は、Claude が書いた計画をもとに Codex（gpt-6.1-sol、推論レベル high）が書き、Claude が差分のレビューと検証の再実行をした。
