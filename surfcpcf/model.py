@@ -38,8 +38,20 @@ def make_transolver(transolver_dir, n_hidden=128, n_layers=5, slice_num=32):
                              n_layers=n_layers, slice_num=slice_num)
 
 
+MODELS = ("transolver", "mlp")
+
+
+def build_model(name, transolver_dir, n_hidden, n_layers, slice_num):
+    """Model named in a run config; slice_num is ignored by the point MLP."""
+    if name == "transolver":
+        return make_transolver(transolver_dir, n_hidden, n_layers, slice_num)
+    if name == "mlp":
+        return PointMLP(n_hidden, n_layers)
+    raise ValueError(f"Unknown model {name!r}; expected one of {MODELS}")
+
+
 class PointMLP(nn.Module):
-    """Independent point predictions, reserved for SURF-05 (not trained here)."""
+    """Independent point predictions (SURF-05 to 08): no exchange between points."""
     def __init__(self, n_hidden=128, n_layers=5):
         super().__init__()
         if n_hidden < 1 or n_layers < 1:

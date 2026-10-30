@@ -23,7 +23,9 @@ and evaluation. Every run records the device and the environment value of
 `PYTORCH_ENABLE_MPS_FALLBACK`; this package does not enable fallback itself.
 The model retains official grid extents and `unified_pos=1`, with unnormalized
 coordinates for grid distances. It loads upstream code at runtime without
-copying or editing it. PointMLP is defined only for a later comparison.
+copying or editing it. `--model mlp` trains the point MLP baseline instead
+(`--n-hidden`, `--n-layers` set its width and depth; `--slice-num` is ignored);
+evaluation rebuilds whichever model the run config names.
 
 Preprocessing writes one compressed NPZ per case plus `index.json`, which retains
 the official manifest and metadata. Existing files are skipped; `--overwrite`

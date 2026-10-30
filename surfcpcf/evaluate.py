@@ -18,7 +18,7 @@ import torch
 from .checks import integration_args
 from .data import Normalization, SurfaceDataset, load_case, read_splits, to_device
 from .geometry import COEFFICIENTS, coefficients_from_cp_cf, relative_error
-from .model import make_transolver, select_device
+from .model import build_model, select_device
 from .train import synchronize
 
 
@@ -81,7 +81,9 @@ def main(argv=None):
     norm = Normalization.load(args.run / "norm.npz")
     dataset = SurfaceDataset(args.surface, names, norm)
     device = select_device(args.device)
-    model = make_transolver(args.transolver_dir, config["n_hidden"], config["n_layers"], config["slice_num"]).to(device)
+    # Runs saved before --model existed are Transolver runs.
+    model = build_model(config.get("model", "transolver"), args.transolver_dir,
+                        config["n_hidden"], config["n_layers"], config["slice_num"]).to(device)
     model.load_state_dict(torch.load(args.run / "model.pt", map_location=device, weights_only=True))
     model.eval()
     synchronize(device)
@@ -127,7 +129,7 @@ def main(argv=None):
     representatives = list(zip(("minimum", "median (upper middle)", "maximum"),
                                (ordered[0], ordered[len(ordered) // 2], ordered[-1])))
     metrics = {"task": config["task"], "official_test_split": "full_test" if config["task"] == "scarce" else config["task"] + "_test",
-               "cases": len(rows), "epochs": config["epochs"], "model": {k: config[k] for k in ("n_hidden", "n_layers", "slice_num")},
+               "cases": len(rows), "epochs": config["epochs"], "model": dict(name=config.get("model", "transolver"), **{k: config[k] for k in ("n_hidden", "n_layers", "slice_num")}),
                "setting": config["setting"], "point_subsampling": False,
                "device": str(device), "torch_version": torch.__version__,
                "PYTORCH_ENABLE_MPS_FALLBACK": os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
