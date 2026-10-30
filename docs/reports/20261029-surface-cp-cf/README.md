@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01・SURF-02・SURF-06 は実行済み（2026-10-30）。ほかは未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01・SURF-02・SURF-06 は実行済み（2026-10-30〜31。SURF-02・06 は乱数の種を変えて各3回）。ほかは未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -92,6 +92,10 @@ Transolver の大きさとエポック数は公式の AirfRANS 設定（層数8�
 | SURF-01 | 学習と評価が完了 | Transolver | `scarce` | 180（200 から公式どおり1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 20:04 |
 | SURF-02 | 学習と評価が完了 | Transolver | `full` | 720（800 から1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 22:19 |
 | SURF-06 | 学習と評価が完了 | 点ごとの MLP | `full` | 720（同上） | 5（隠れ層） | 490 | — | 200 | 2026-10-30 23:14 |
+| SURF-02-s1 | 学習と評価が完了 | Transolver | `full` | 720 | 5 | 128 | 32 | 200（種1） | 2026-10-30 23:37 |
+| SURF-06-s1 | 学習と評価が完了 | 点ごとの MLP | `full` | 720 | 5（隠れ層） | 490 | — | 200（種1） | 2026-10-31 00:27 |
+| SURF-02-s2 | 学習と評価が完了 | Transolver | `full` | 720 | 5 | 128 | 32 | 200（種2） | 2026-10-31 00:34 |
+| SURF-06-s2 | 学習と評価が完了 | 点ごとの MLP | `full` | 720 | 5（隠れ層） | 490 | — | 200（種2） | 2026-10-31 01:24 |
 
 共通の条件は上の表のとおり。`unified_pos` は公式と同じ1にした（正規化前の座標から格子までの距離を特徴に加える）。乱数の種は0。テストは `full_test` の200ケース、表面の全点。
 
@@ -256,6 +260,25 @@ Cp の相対L2誤差が最小・中央・最大のテストケース（破線が
 
 時間とメモリ（SURF-06）: 1エポック平均2.2秒、学習全体 449秒（約7.5分）、評価 1.1秒、MPS が確保したメモリ 0.055 GiB、プロセスのピークメモリ 1.4 GB、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定。
 
+### 乱数の種による揺れ
+
+SURF-02 と SURF-06 を、乱数の種だけを1・2に変えて学習し直した（実行ID の `-s1`、`-s2`。元の実行は種0）。種は重みの初期値と学習ケースの順番に効く。夜間に1つずつ順番に実行し、同時にほかの学習は走らせていない。コードは PR #2 のマージ後（main の commit `9e26fde`）。
+
+| 指標（テスト200ケースの中央値） | SURF-02 種0 / 1 / 2 | 平均 ± 標準偏差 | SURF-06 種0 / 1 / 2 | 平均 ± 標準偏差 |
+|---|---|---|---|---|
+| Cp の相対L2誤差 | 0.049 / 0.039 / 0.045 | 0.044 ± 0.005 | 0.335 / 0.334 / 0.321 | 0.330 ± 0.008 |
+| Cf の相対L2誤差 | 0.051 / 0.047 / 0.045 | 0.047 ± 0.003 | 0.349 / 0.353 / 0.354 | 0.352 ± 0.002 |
+| Cl の相対誤差 | 0.033 / 0.028 / 0.032 | 0.031 ± 0.003 | 0.065 / 0.063 / 0.059 | 0.062 ± 0.003 |
+| Cd の相対誤差 | 0.191 / 0.152 / 0.211 | 0.18 ± 0.03 | 0.570 / 0.603 / 0.571 | 0.58 ± 0.02 |
+| Cd の圧力成分の相対誤差 | 0.634 / 0.486 / 0.584 | 0.57 ± 0.08 | 1.76 / 1.83 / 1.71 | 1.77 ± 0.06 |
+| Cd の摩擦成分の相対誤差 | 0.014 / 0.009 / 0.013 | 0.012 ± 0.003 | 0.017 / 0.020 / 0.019 | 0.019 ± 0.001 |
+| Cl の順位相関 | 0.999 / 0.998 / 0.998 | 0.998 | 0.994 / 0.995 / 0.994 | 0.994 |
+| Cd の順位相関 | 0.47 / 0.54 / 0.43 | 0.48 ± 0.06 | 0.07 / −0.03 / −0.05 | 0.00 ± 0.06 |
+
+Transolver と点ごとの MLP の差は、すべての指標で種による揺れよりずっと大きい。SURF-06 で述べた比較の結論は、種を変えても変わらない。学習の時間も種によらずほぼ同じだった（SURF-02 は 2,960〜2,982秒、SURF-06 は448秒）。
+
+体積場も学習した公式コード（VOL-02、同じデータと大きさ）との比較は、[体積場の記録の VOL-02 の結果](../20261029-volume-vs-surface/README.md#表面だけのモデルsurf-02との比較)にある。Cl の誤差は SURF-02 のほうが小さく（中央値 0.031 と 0.052）、Cd は VOL-02 では摩擦成分が正解の30倍になり予測できない。
+
 ## 評価
 
 | 指標 | 内容 |
@@ -316,6 +339,15 @@ $PY -m surfcpcf.evaluate --run results/surface/SURF-06 --surface data/airfrans_s
 # 前縁の近くを除いた誤差
 $PY docs/reports/20261029-surface-cp-cf/le_error_split.py data/airfrans_surface \
   external/Transolver/Airfoil-Design-AirfRANS results/surface/SURF-02 results/surface/SURF-06
+# 乱数の種による揺れ: seed を 1、2 に変え、出力先を SURF-02-s1 などにする
+for seed in 1 2; do
+  caffeinate -i $PY -m surfcpcf.train --task full --model transolver --n-hidden 128 --n-layers 5 --slice-num 32 \
+    --surface data/airfrans_surface --transolver-dir external/Transolver/Airfoil-Design-AirfRANS \
+    --out results/surface/SURF-02-s$seed --epochs 200 --lr 1e-3 --seed $seed --val-every 10
+  caffeinate -i $PY -m surfcpcf.train --task full --model mlp --n-hidden 490 --n-layers 5 \
+    --surface data/airfrans_surface --out results/surface/SURF-06-s$seed --epochs 200 --lr 1e-3 --seed $seed --val-every 10
+done
+# それぞれ surfcpcf.evaluate で評価する
 ```
 
 実装は、Claude が書いた計画をもとに Codex（gpt-6.1-sol、推論レベル high）が書き、Claude が差分のレビューと検証の再実行をした。
