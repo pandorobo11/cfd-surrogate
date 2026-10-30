@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from .data import Normalization, SurfaceDataset, load_case, read_splits, to_device
-from .model import make_transolver, select_device
+from .model import MODELS, build_model, select_device
 
 
 def synchronize(device):
@@ -44,6 +44,7 @@ def main(argv=None):
     parser.add_argument("--surface", type=Path, default=Path("data/airfrans_surface"))
     parser.add_argument("--transolver-dir", type=Path, default=Path("external/Transolver/Airfoil-Design-AirfRANS"))
     parser.add_argument("--out", type=Path, default=Path("results/surface/SURF-01"))
+    parser.add_argument("--model", choices=MODELS, default="transolver")
     parser.add_argument("--n-hidden", type=int, default=128)
     parser.add_argument("--n-layers", type=int, default=5)
     parser.add_argument("--slice-num", type=int, default=32)
@@ -70,7 +71,7 @@ def main(argv=None):
     norm.save(args.out / "norm.npz")
     train = SurfaceDataset(args.surface, splits["train"], norm)
     val = SurfaceDataset(args.surface, splits["val"], norm)
-    model = make_transolver(args.transolver_dir, args.n_hidden, args.n_layers, args.slice_num).to(device)
+    model = build_model(args.model, args.transolver_dir, args.n_hidden, args.n_layers, args.slice_num).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     total_steps = (len(train) // 1 + 1) * args.epochs
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, total_steps=total_steps)

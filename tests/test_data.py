@@ -43,3 +43,16 @@ def test_train_only_point_weighted_normalization(tmp_path):
     assert data.x.shape == (2, 6) and target.shape == (2, 2)
     np.testing.assert_array_equal(data.pos.numpy(), load_case(tmp_path, names[0])["pos"])
     assert dataset[1][0].x.shape == (4, 6)
+
+
+def test_build_point_mlp_ignores_neighbours():
+    from types import SimpleNamespace
+    from surfcpcf.model import build_model
+    model = build_model("mlp", "unused", n_hidden=16, n_layers=2, slice_num=32)
+    x = torch.randn(5, 6)
+    out = model(SimpleNamespace(x=x, pos=torch.zeros(5, 2)))
+    assert out.shape == (5, 2)
+    # Each point's prediction depends only on its own inputs.
+    torch.testing.assert_close(model(SimpleNamespace(x=x[:2], pos=torch.zeros(2, 2))), out[:2])
+    with pytest.raises(ValueError):
+        build_model("unknown", "unused", 16, 2, 32)
