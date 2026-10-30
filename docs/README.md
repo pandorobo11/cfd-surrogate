@@ -33,4 +33,4 @@
 |---|---|
 | [20261029-standard-benchmark-repro](reports/20261029-standard-benchmark-repro/README.md) | Airfoil と Elasticity で論文の値を再現し、MPS の環境を検証する計画。10月30日に Elasticity を500エポック学習し、相対L2 0.00605（論文 0.0064）。Airfoil は試走だけで、500エポックで約17時間かかる見込みのため見送り |
 | [20261029-surface-cp-cf](reports/20261029-surface-cp-cf/README.md) | 表面だけの Cp・Cf 予測と比較用モデル、スライスの可視化の計画（10月29日、未実行） |
-| [20261029-volume-vs-surface](reports/20261029-volume-vs-surface/README.md) | 体積場も学習させた公式コードと、表面だけのモデルの表面の精度を比べる計画（10月29日）。10月30日に縮小した VOL-01（`scarce`、隠れ次元128・5層、200エポック）を実行。学習75分、評価14分。Cl の相対誤差は中央値 0.093、順位相関 0.98。Cd は CFD の約20倍で使えない |
+| [20261029-volume-vs-surface](reports/20261029-volume-vs-surface/README.md) | 体積場も学習させた公式コードと、表面だけのモデルの表面の精度を比べる計画（10月29日）。10月30日に縮小した VOL-01（`scarce`、隠れ次元128・5層、200エポック）を実行。学習75分、評価14分。Cl の相対誤差は中央値 0.093、順位相関 0.98。Cd は CFD の約20倍で使えない。誤差の大部分は、壁近くの速度の誤差が膨らませた摩擦成分（正解の約36倍）。圧力成分の誤差も Cd と同じ大きさ |

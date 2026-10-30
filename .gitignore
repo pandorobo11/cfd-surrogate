@@ -39,6 +39,7 @@ lightning_logs/
 *.hdf5
 *.pkl
 *.csv
+!/docs/reports/20261029-volume-vs-surface/*.csv
 *.zip
 *.tar
 *.gz
