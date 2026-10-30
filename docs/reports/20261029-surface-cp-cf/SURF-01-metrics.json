@@ -1,0 +1,101 @@
+{
+  "task": "scarce",
+  "official_test_split": "full_test",
+  "cases": 200,
+  "epochs": 200,
+  "model": {
+    "n_hidden": 128,
+    "n_layers": 5,
+    "slice_num": 32
+  },
+  "setting": "surface only Cp/Cf; surrogate, not a validated flow solution",
+  "point_subsampling": false,
+  "device": "mps",
+  "torch_version": "2.15.0",
+  "PYTORCH_ENABLE_MPS_FALLBACK": null,
+  "inference_and_integration_seconds": 1.59142562514171,
+  "training_range": {
+    "uinf": [
+      31.468,
+      92.369
+    ],
+    "aoa_deg": [
+      -4.79,
+      14.837000000000002
+    ],
+    "nu": [
+      1.5498148291427463e-05,
+      1.5498148291427463e-05
+    ],
+    "reynolds_unit_chord": [
+      2030436.1145780226,
+      5960002.334671965
+    ]
+  },
+  "geometry_extrapolation_rule": "case-name geometry parameter tuple absent from training; not a geometric distance test",
+  "extrapolation_counts": {
+    "reynolds_extrapolation": 3,
+    "aoa_extrapolation": 2,
+    "unseen_geometry_parameters": 200
+  },
+  "field_relative_l2": {
+    "cp": {
+      "mean": 0.20913164212928947,
+      "median": 0.16964338454624706,
+      "nonfinite_count": 0
+    },
+    "cf": {
+      "mean": 0.17522578972371924,
+      "median": 0.1391709322968076,
+      "nonfinite_count": 0
+    }
+  },
+  "coefficient_relative_error": {
+    "cd": {
+      "mean": 1.1299585190441905,
+      "median": 0.8877260043921003,
+      "nonfinite_count": 0
+    },
+    "cdp": {
+      "mean": 3.552640594152955,
+      "median": 2.383184378893122,
+      "nonfinite_count": 0
+    },
+    "cdv": {
+      "mean": 0.048526731592047984,
+      "median": 0.035136830033759545,
+      "nonfinite_count": 0
+    },
+    "cl": {
+      "mean": 0.48597795042321335,
+      "median": 0.14534337231596192,
+      "nonfinite_count": 0
+    },
+    "clp": {
+      "mean": 0.4870453271536437,
+      "median": 0.14514741129919215,
+      "nonfinite_count": 0
+    },
+    "clv": {
+      "mean": 2.123913548313846,
+      "median": 0.4691088086117462,
+      "nonfinite_count": 0
+    }
+  },
+  "spearman": {
+    "cl": {
+      "statistic": 0.9809975249381235,
+      "pvalue": 5.688825607443647e-143
+    },
+    "cd": {
+      "statistic": -0.04397809945248632,
+      "pvalue": 0.5363478535856506
+    }
+  },
+  "representatives": {
+    "minimum": "airFoil2D_SST_55.312_11.209_2.831_6.36_12.435",
+    "median (upper middle)": "airFoil2D_SST_86.061_2.445_0.422_5.645_19.256",
+    "maximum": "airFoil2D_SST_80.611_-1.934_4.377_0.0_7.627"
+  },
+  "relative_error_zero_policy": "Exact zero reference with nonzero error is infinity (CSV); nonfinite aggregate is null (JSON), with count."
+}
