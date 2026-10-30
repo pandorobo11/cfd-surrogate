@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01 は実行済み（2026-10-30）。SURF-02〜12 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01・SURF-02 は実行済み（2026-10-30）。SURF-03〜12 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -90,6 +90,7 @@ Transolver の大きさとエポック数は公式の AirfRANS 設定（層数8�
 | 実行ID | 状態 | モデル | タスク | 学習ケース数 | 層数 | 隠れ次元 | スライス数 | エポック数 | 開始 |
 |---|---|---|---|---|---|---|---|---|---|
 | SURF-01 | 学習と評価が完了 | Transolver | `scarce` | 180（200 から公式どおり1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 20:04 |
+| SURF-02 | 学習と評価が完了 | Transolver | `full` | 720（800 から1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-30 22:25 |
 
 共通の条件は上の表のとおり。`unified_pos` は公式と同じ1にした（正規化前の座標から格子までの距離を特徴に加える）。乱数の種は0。テストは `full_test` の200ケース、表面の全点。
 
@@ -168,6 +169,44 @@ Cp の相対L2誤差が最小・中央・最大のテストケースの Cp・Cf 
 
 参考: 2エポックの試運転では、1エポックが MPS で3.7秒、CPU で2.3秒だった。1ケース約1000点と小さいので、CPU のほうが速い。
 
+### SURF-02 の結果
+
+SURF-01 と同じ設定で、学習データだけを `full`（720ケース）に増やした。テストは同じ `full_test` の200ケース。**表面のみの独自の設定で、論文の数値とは比較できない。縮小したモデル。** 学習データの範囲は、レイノルズ数 2.02×10⁶〜6.04×10⁶、迎角 −4.9°〜14.9°。テストのうちレイノルズ数の外挿は0ケース、迎角の外挿は1ケース。翼型のパラメータの組は200ケースすべてが学習データにない。値は [SURF-02-metrics.json](SURF-02-metrics.json)。
+
+| 指標（中央値。括弧内は平均） | SURF-01（`scarce`） | SURF-02（`full`） |
+|---|---|---|
+| Cp の相対L2誤差 | 0.170（0.209） | 0.049（0.055） |
+| Cf の相対L2誤差 | 0.139（0.175） | 0.051（0.056） |
+| Cl の相対誤差 | 0.145（0.486） | 0.033（0.074） |
+| Cd の相対誤差 | 0.888（1.13） | 0.191（0.304） |
+| Cd の圧力成分の相対誤差 | 2.38（3.55） | 0.634（0.845） |
+| Cd の摩擦成分の相対誤差 | 0.035（0.049） | 0.014（0.018） |
+| Cl の順位相関 | 0.981 | 0.999 |
+| Cd の順位相関 | −0.044 | 0.470 |
+
+わかったこと:
+
+- 学習データを4倍にすると、すべての指標が大きく良くなった。Cp・Cf の誤差は約3分の1、Cl の誤差は約4分の1になった。
+- Cd も予測できるようになり始めた（中央値 19%、順位相関 0.47）。それでも誤差の大部分は圧力成分から来ており、圧力成分の誤差は中央値 63% と大きい。Cd の精度をさらに上げるには、圧力抵抗の精度が鍵になる。
+- 検証の MSE は最後に Cp 0.0023、Cf 0.0061（学習の損失 0.00075）で、SURF-01 より過学習の差は縮まった。
+- `full` での体積場のモデル（VOL-02）はまだ学習していないので、同じデータ量での体積場のモデルとの比較はまだない。
+
+学習の途中の検証の MSE（正規化後、検証80ケース）:
+
+| エポック | 学習の損失 | 検証 Cp | 検証 Cf |
+|---|---|---|---|
+| 1 | 0.741 | 0.525 | 0.550 |
+| 50 | 0.107 | 0.0396 | 0.0628 |
+| 100 | 0.0229 | 0.00990 | 0.0216 |
+| 150 | 0.00391 | 0.00417 | 0.00984 |
+| 200 | 0.00075 | 0.00232 | 0.00610 |
+
+Cp の相対L2誤差が最小・中央・最大のテストケース（破線が予測）:
+
+![SURF-02 の代表3ケース](SURF-02-cases.png)
+
+時間とメモリ（SURF-02）: 1エポック平均14.8秒、学習全体 2,961秒（約49分）、評価 2.0秒、MPS が確保したメモリ 0.18 GiB、プロセスのピークメモリ 2.8 GB、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定。前処理は `full_train` の残り600ケースに229秒かかった。全1000ケースで学習前の確認2をやり直し、最大相対差は 1.7e-13 だった。
+
 ## 評価
 
 | 指標 | 内容 |
@@ -213,6 +252,13 @@ caffeinate -i $PY -m surfcpcf.train --task scarce --surface data/airfrans_surfac
   --transolver-dir external/Transolver/Airfoil-Design-AirfRANS --out results/surface/SURF-01 \
   --n-hidden 128 --n-layers 5 --slice-num 32 --epochs 200 --lr 1e-3 --seed 0 --val-every 10
 $PY -m surfcpcf.evaluate --run results/surface/SURF-01 --surface data/airfrans_surface \
+  --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
+# SURF-02: full_train も前処理してから、タスクと出力先だけを変える
+$PY -m surfcpcf.preprocess --dataset data/airfrans/Dataset --out data/airfrans_surface --splits full_train full_test
+caffeinate -i $PY -m surfcpcf.train --task full --surface data/airfrans_surface \
+  --transolver-dir external/Transolver/Airfoil-Design-AirfRANS --out results/surface/SURF-02 \
+  --n-hidden 128 --n-layers 5 --slice-num 32 --epochs 200 --lr 1e-3 --seed 0 --val-every 10
+$PY -m surfcpcf.evaluate --run results/surface/SURF-02 --surface data/airfrans_surface \
   --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
 ```
 
