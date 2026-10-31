@@ -1,0 +1,42 @@
+{
+  "cases": 200,
+  "slice_num": 32,
+  "le_fraction_of_points": "median 0.359 of surface points lie within 2% chord of the leading edge (full_test)",
+  "per_layer": [
+    {
+      "layer": 1,
+      "used_slices_median_over_heads_and_cases": 2.0,
+      "mean_max_weight": 0.8077808121964335,
+      "le_specific_slices_mean_per_head": 0.3425,
+      "heads_with_le_specific_slice_fraction": 0.308125
+    },
+    {
+      "layer": 2,
+      "used_slices_median_over_heads_and_cases": 3.0,
+      "mean_max_weight": 0.6660077916737646,
+      "le_specific_slices_mean_per_head": 0.67125,
+      "heads_with_le_specific_slice_fraction": 0.46
+    },
+    {
+      "layer": 3,
+      "used_slices_median_over_heads_and_cases": 6.0,
+      "mean_max_weight": 0.17759380053030327,
+      "le_specific_slices_mean_per_head": 1.953125,
+      "heads_with_le_specific_slice_fraction": 0.83625
+    },
+    {
+      "layer": 4,
+      "used_slices_median_over_heads_and_cases": 5.0,
+      "mean_max_weight": 0.032319000631105155,
+      "le_specific_slices_mean_per_head": 1.1225,
+      "heads_with_le_specific_slice_fraction": 0.705
+    },
+    {
+      "layer": 5,
+      "used_slices_median_over_heads_and_cases": 3.0,
+      "mean_max_weight": 0.5521694862982258,
+      "le_specific_slices_mean_per_head": 0.77125,
+      "heads_with_le_specific_slice_fraction": 0.370625
+    }
+  ]
+}

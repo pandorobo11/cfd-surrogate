@@ -7,6 +7,7 @@ Transolver で、形状や気流条件を変えたときの流れ場を予測す
 | 主題 | 本文 |
 |---|---|
 | 環境とデータセットの選定 | [docs/setup/feasibility.md](docs/setup/feasibility.md) |
+| AirfRANS の翼面の量の予測 | [docs/surface/conclusions.md](docs/surface/conclusions.md) |
 
 - `docs/reports/`: 1回ごとの調査の記録（計画、実使用設定、集計CSV、図、再現手順）。
 - `data/`: データセット（AirfRANS など）。ローカル専用。
