@@ -8,6 +8,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from .torch_forces import coefficients_from_cp_cf
+
 
 def split_cases(manifest, task):
     train = list(manifest[task + "_train"])
@@ -60,15 +62,26 @@ class Normalization:
 
 
 class SurfaceDataset(Dataset):
-    def __init__(self, surface, names, norm):
+    def __init__(self, surface, names, norm, include_forces=False):
         self.names = list(names)
         self.samples = []
+        self.force_data = []
+        self.target_coefficients = []
+        self.reference_coefficients = []
         for name in self.names:
             case = load_case(surface, name)
             x, y = norm.transform(*features(case))
             self.samples.append((torch.tensor(x, dtype=torch.float32),
                                  torch.tensor(case["pos"], dtype=torch.float32),
                                  torch.tensor(y, dtype=torch.float32)))
+            if include_forces:
+                geometry = {key: torch.tensor(case[key], dtype=torch.long if key == "lines" else torch.float32)
+                            for key in ("normal", "lines", "length", "cell_normal", "aoa_rad")}
+                # Use the same fp32 inverse transform as predictions, including rounding.
+                truth = self.samples[-1][2] * torch.tensor(norm.y_std, dtype=torch.float32) + torch.tensor(norm.y_mean, dtype=torch.float32)
+                self.force_data.append(geometry)
+                self.target_coefficients.append(coefficients_from_cp_cf(truth[:, 0], truth[:, 1], **geometry))
+                self.reference_coefficients.append(case["reference"])
 
     def __len__(self):
         return len(self.samples)

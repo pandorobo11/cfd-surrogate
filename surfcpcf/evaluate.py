@@ -6,18 +6,17 @@ import json
 import os
 from pathlib import Path
 import time
-import warnings
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import spearmanr
 import torch
 
 from .checks import integration_args
 from .data import Normalization, SurfaceDataset, load_case, read_splits, to_device
-from .geometry import COEFFICIENTS, coefficients_from_cp_cf, relative_error
+from .geometry import COEFFICIENTS, coefficients_from_cp_cf
+from .metrics import Extrapolation, coefficient_metrics, coefficient_row, distribution
 from .model import build_model, select_device
 from .train import synchronize
 
@@ -26,14 +25,6 @@ def relative_l2(pred, true):
     norm = np.linalg.norm(true)
     error = np.linalg.norm(pred - true)
     return float(error / norm) if norm else (0. if error == 0 else float("inf"))
-
-
-def distribution(values):
-    values = np.asarray(values)
-    mean, median = float(values.mean()), float(np.median(values))
-    return {"mean": mean if np.isfinite(mean) else None,
-            "median": median if np.isfinite(median) else None,
-            "nonfinite_count": int((~np.isfinite(values)).sum())}
 
 
 def plot_cases(path, representatives, surface, predictions):
@@ -90,8 +81,7 @@ def main(argv=None):
     start = time.perf_counter()
     rows, predictions = [], {}
     train_meta = [json.loads(str(load_case(args.surface, name)["metadata"])) for name in splits["train"]]
-    re_range = [min(m["uinf"] / m["nu"] for m in train_meta), max(m["uinf"] / m["nu"] for m in train_meta)]
-    train_geometries = {tuple(name.split("_")[4:]) for name in splits["train"]}
+    extrapolation = Extrapolation(splits["train"], train_meta, config["training_range"])
     with torch.no_grad():
         for name, (data, _) in zip(names, dataset):
             case = load_case(args.surface, name)
@@ -103,12 +93,8 @@ def main(argv=None):
             meta = json.loads(str(case["metadata"]))
             row = {"case": name, "cp_relative_l2": relative_l2(prediction[:, 0], case["cp"]),
                    "cf_relative_l2": relative_l2(prediction[:, 1], case["cf"]),
-                   "reynolds_extrapolation": not re_range[0] <= meta["uinf"] / meta["nu"] <= re_range[1],
-                   "aoa_extrapolation": not config["training_range"]["aoa_deg"][0] <= meta["aoa_deg"] <= config["training_range"]["aoa_deg"][1],
-                   "unseen_geometry_parameters": tuple(name.split("_")[4:]) not in train_geometries}
-            for key, reference in zip(COEFFICIENTS, case["reference"]):
-                row.update({f"pred_{key}": coefficients[key], f"true_{key}": float(reference),
-                            f"{key}_relative_error": float(relative_error(coefficients[key], reference))})
+                   **extrapolation.flags(name, meta)}
+            row.update(coefficient_row(coefficients, dict(zip(COEFFICIENTS, case["reference"]))))
             rows.append(row)
     synchronize(device)
     elapsed = time.perf_counter() - start
@@ -118,13 +104,6 @@ def main(argv=None):
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
-    correlations = {}
-    for key in ("cl", "cd"):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            correlation = spearmanr([r[f"pred_{key}"] for r in rows], [r[f"true_{key}"] for r in rows])
-        correlations[key] = {"statistic": float(correlation.statistic) if np.isfinite(correlation.statistic) else None,
-                             "pvalue": float(correlation.pvalue) if np.isfinite(correlation.pvalue) else None}
     ordered = sorted(rows, key=lambda r: r["cp_relative_l2"])
     representatives = list(zip(("minimum", "median (upper middle)", "maximum"),
                                (ordered[0], ordered[len(ordered) // 2], ordered[-1])))
@@ -134,13 +113,10 @@ def main(argv=None):
                "device": str(device), "torch_version": torch.__version__,
                "PYTORCH_ENABLE_MPS_FALLBACK": os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
                "inference_and_integration_seconds": elapsed,
-               "training_range": dict(config["training_range"], reynolds_unit_chord=re_range),
-               "geometry_extrapolation_rule": "case-name geometry parameter tuple absent from training; not a geometric distance test",
-               "extrapolation_counts": {key: sum(r[key] for r in rows) for key in ("reynolds_extrapolation", "aoa_extrapolation", "unseen_geometry_parameters")},
+               "training_range": dict(config["training_range"], reynolds_unit_chord=extrapolation.re_range),
                "field_relative_l2": {field: distribution([r[f"{field}_relative_l2"] for r in rows]) for field in ("cp", "cf")},
-               "coefficient_relative_error": {key: distribution([r[f"{key}_relative_error"] for r in rows]) for key in COEFFICIENTS},
-               "spearman": correlations, "representatives": {label: r["case"] for label, r in representatives},
-               "relative_error_zero_policy": "Exact zero reference with nonzero error is infinity (CSV); nonfinite aggregate is null (JSON), with count."}
+               **coefficient_metrics(rows, COEFFICIENTS),
+               "representatives": {label: r["case"] for label, r in representatives}}
     (out / "metrics.json").write_text(json.dumps(metrics, indent=2, allow_nan=False) + "\n")
     plot_cases(out / "cases.png", representatives, args.surface, predictions)
     print(json.dumps(metrics, indent=2, allow_nan=False), flush=True)

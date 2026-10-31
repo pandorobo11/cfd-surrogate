@@ -86,3 +86,89 @@ operation only; they do not establish convergence or physical validation.
 
 Sources: AirfRANS 0.1.5.1 and the official Transolver AirfRANS implementation.
 See the repository research plan for acquisition, version and license records.
+
+## Integrated force loss
+
+```sh
+$PY -m surfcpcf.train --task scarce --surface data/airfrans_surface \
+  --transolver-dir external/Transolver/Airfoil-Design-AirfRANS \
+  --out results/surface/SMOKE-FORCE --epochs 2 --val-every 1 \
+  --force-loss-weight 1 --force-loss-coeffs cl,cd
+$PY -m surfcpcf.evaluate --run results/surface/SMOKE-FORCE \
+  --surface data/airfrans_surface \
+  --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
+```
+
+`--force-loss-weight` defaults to zero, preserving the original field loss,
+its gradients and optimizer updates. Positive weights enable
+
+```text
+L = mean((Y_pred_normalized - Y_true_normalized)^2) + weight * L_force
+L_force = mean over selected C of ((C_pred - C_target) / s_C)^2
+s_C = max(population_std(C_target over training cases), 1e-8)
+```
+
+`--force-loss-coeffs` defaults to `cl,cd` and accepts distinct members of
+`cd,cdp,cdv,cl,clp,clv`. The scale is computed once, equally weighting training
+cases, and saved with the selected coefficients and weight in `config.json`.
+The `1e-8` floor only protects degenerate training distributions.
+
+The differentiable integral reverses target normalization, forms the point
+shear `Cf * (-ny, nx)`, averages both endpoint values for each line, integrates
+pressure with `cell_normal * length` and shear with `length`, then rotates with
+`[[cos(a), sin(a)], [-sin(a), cos(a)]]`. Dynamic pressure cancels. It neither
+flips nor normalizes normals. All surface points and lines are retained.
+
+**Loss targets** are integrated ground-truth Cp and tangential Cf, not the
+full-vector official `reference`. Targets use the same fp32 inverse transform
+as predictions so a prediction equal to the normalized truth has zero force
+loss. `SurfaceDataset(..., include_forces=True)` caches geometry and these
+`target_coefficients`; its existing `(data, target)` item interface is unchanged.
+**Validation errors** use the official reference, like test evaluation, and may
+therefore retain a small difference due to omitted normal shear even for exact
+Cp/Cf predictions. In `log.csv`, `train_loss` is the total loss (field loss plus
+weighted force loss). `train_field_loss` is the epoch mean of the per-case field
+MSE, directly comparable to historical field-only `train_loss`; at weight zero,
+`train_field_loss` equals `train_loss`. The log also includes `train_force_loss`
+(unweighted; zero when integration is disabled), `val_cl_rel_median` and
+`val_cd_rel_median`. Validation
+errors are recorded on validation epochs even at weight zero. Old configs
+without the force-loss keys remain evaluable.
+
+## Case-level parameter regression (SURF-09 to SURF-12)
+
+```sh
+$PY -m surfcpcf.param_regression --task full --surface data/airfrans_surface \
+  --out results/surface/SMOKE-PARAM --epochs 200
+# Full planned runs require a separate reviewed decision:
+# --epochs 2000 --lr 1e-3 --batch-size 32 --n-hidden 128 --n-layers 3 --seed 0
+```
+
+Each case produces one seven-component input in this order:
+`[Uinf, aoa_deg, series, p1, p2, p3_or_zero, thickness]`. `series=0` denotes
+four-digit NACA with parameters `[p1,p2,0,p3]`; `series=1` denotes five-digit
+NACA with `[p1,p2,p3,p4]`. Thus thickness is always last, and the five-digit
+reflex flag occupies the sixth input. Case-name speed and angle are checked
+against `index.json` metadata (absolute tolerance `1e-8`). Outputs are `[Cl,Cd]`
+from the official full-vector `reference` (indices 3 and 0).
+
+The official train list's final 10% is validation; scarce uses `full_test`.
+Input/output normalization uses equally weighted training cases only, with
+`1e-8` added to population standard deviations. Defaults are three hidden
+layers of width 128, GELU, Adam at `1e-3`, batch size 32, seed 0 and 2000 epochs.
+Each epoch shuffles the training cases. OneCycleLR uses exactly
+`ceil(n_train / batch_size) * epochs` optimizer steps. The final epoch model is
+saved, without validation selection. Validation runs every 100 epochs and at
+the final epoch, including shorter smoke runs.
+
+Outputs are `model.pt`, `norm.npz`, `config.json`, `log.csv`,
+`eval/metrics.json` and `eval/per_case.csv`. Config includes input/target order,
+training ranges, splits, runtime, model size, device and fallback state. Logs
+contain per-epoch training MSE and timing; validation columns are filled only
+on validation epochs. Test evaluation shares relative errors, nonfinite-value
+handling, coefficient summaries, Spearman correlations and extrapolation rules
+with surface-field evaluation. No field or pressure/viscous-component errors
+are reported for this model. Saved training ranges and per-case flags mark
+Reynolds/angle extrapolation and unseen geometry parameter tuples. A 200-epoch
+smoke run verifies this pipeline only; it is not evidence of convergence or a
+validated flow solution, and timings must be kept separate from accuracy.
