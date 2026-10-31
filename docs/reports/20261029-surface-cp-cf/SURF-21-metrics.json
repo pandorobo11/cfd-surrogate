@@ -1,0 +1,64 @@
+{
+  "task": "full",
+  "official_test_split": "full_test",
+  "cases": 200,
+  "epochs": 2000,
+  "model": {
+    "n_hidden": 128,
+    "n_layers": 3,
+    "name": "param_regression",
+    "features": "geometry"
+  },
+  "setting": "case-level measured geometry regression; surrogate, not a validated flow solution",
+  "device": "mps",
+  "torch_version": "2.15.0",
+  "PYTORCH_ENABLE_MPS_FALLBACK": null,
+  "inference_and_integration_seconds": 0.0020257500000298023,
+  "training_range": {
+    "uinf": [
+      31.283,
+      93.592
+    ],
+    "aoa_deg": [
+      -4.934,
+      14.926
+    ],
+    "nu": [
+      1.5498148291427463e-05,
+      1.5498148291427463e-05
+    ],
+    "reynolds_unit_chord": [
+      2018499.204663286,
+      6038914.987783981
+    ]
+  },
+  "coefficient_relative_error": {
+    "cl": {
+      "mean": 0.012677594918858058,
+      "median": 0.004124464135580241,
+      "nonfinite_count": 0
+    },
+    "cd": {
+      "mean": 0.007972912620595948,
+      "median": 0.003076325361042651,
+      "nonfinite_count": 0
+    }
+  },
+  "spearman": {
+    "cl": {
+      "statistic": 0.9998544963624092,
+      "pvalue": 0.0
+    },
+    "cd": {
+      "statistic": 0.9976134403360085,
+      "pvalue": 8.020056610874425e-232
+    }
+  },
+  "extrapolation_counts": {
+    "reynolds_extrapolation": 0,
+    "aoa_extrapolation": 1,
+    "unseen_geometry_parameters": 200
+  },
+  "geometry_extrapolation_rule": "case-name geometry parameter tuple absent from training; not a geometric distance test",
+  "relative_error_zero_policy": "Exact zero reference with nonzero error is infinity (CSV); nonfinite aggregate is null (JSON), with count."
+}

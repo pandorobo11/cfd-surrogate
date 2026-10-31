@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜14 は実行済み（2026-10-30〜31。SURF-02・06 は乱数の種を変えて各3回。SURF-13・14 は10月31日に計画に加えた力係数の損失の実行）。スライスの割り当ての可視化も済み。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜21 は実行済み（2026-10-30〜31。SURF-02・06 は乱数の種を変えて各3回。SURF-13〜21 は10月31日に計画に加えた実行）。スライスの割り当ての可視化も済み。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -104,6 +104,13 @@ Transolver の大きさとエポック数は公式の AirfRANS 設定（層数8�
 | SURF-12 | 学習と評価が完了 | パラメータ回帰 | `aoa` | 724 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 11:13 |
 | SURF-13 | 学習と評価が完了 | Transolver、Cl・Cd の損失の重み1 | `full` | 720 | 5 | 128 | 32 | 200 | 2026-10-31 11:14 |
 | SURF-14 | 学習と評価が完了 | Transolver、Cl・Cd の損失の重み0.1 | `full` | 720 | 5 | 128 | 32 | 200 | 2026-10-31 12:07 |
+| SURF-15 | 学習と評価が完了 | Transolver | `naca4to5` | 341 | 5 | 128 | 32 | 200 | 2026-10-31 13:54 |
+| SURF-16 | 学習と評価が完了 | Transolver | `naca5to4` | 380 | 5 | 128 | 32 | 200 | 2026-10-31 14:18 |
+| SURF-17 | 学習と評価が完了 | パラメータ回帰、NACA のパラメータ | `naca4to5` | 341 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 13:51 |
+| SURF-18 | 学習と評価が完了 | パラメータ回帰、NACA のパラメータ | `naca5to4` | 380 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 13:52 |
+| SURF-19 | 学習と評価が完了 | パラメータ回帰、形の特徴量 | `naca4to5` | 341 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 13:52 |
+| SURF-20 | 学習と評価が完了 | パラメータ回帰、形の特徴量 | `naca5to4` | 380 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 13:53 |
+| SURF-21 | 学習と評価が完了 | パラメータ回帰、形の特徴量 | `full` | 720 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 13:53 |
 
 共通の条件は上の表のとおり。`unified_pos` は公式と同じ1にした（正規化前の座標から格子までの距離を特徴に加える）。乱数の種は0。テストは `full_test` の200ケース、表面の全点。
 
@@ -454,6 +461,45 @@ SURF-02（Transolver、`full`、種0）の保存したモデルで、テスト20
 - 迎角が 5.6° と 14.7° のケースで、3層目の分け方はよく似ている。迎角による違いは、負圧のピークの領域の広がりなどに小さく現れる程度。
 - 点ごとの MLP（SURF-06）との差が前縁に集中していたこと（SURF-06 の結果）と合わせると、前縁の点をまとめたスライスどうしが情報をやり取りすることが、前縁の負圧のピークの予測に効いている可能性がある。ただし、スライスを壊したときの精度の変化（因果）は確かめていない。
 
+### SURF-15〜21 の結果（NACA の系列をまたぐ一般化）
+
+AirfRANS の形状は NACA 4桁系と5桁系だけなので、「パラメータで表せない形状」の代わりに、一方の系列だけで学習してもう一方の系列でテストした。5桁系には反り返りのある翼型（5桁系の全511ケースのうち279ケース）が含まれ、4桁系のパラメータでは表せない。
+
+| タスク | 学習と検証の元 | テスト |
+|---|---|---|
+| `naca4to5` | `full_train` の4桁系（学習341、検証37） | `full_test` の5桁系（89） |
+| `naca5to4` | `full_train` の5桁系（学習380、検証42） | `full_test` の4桁系（111） |
+
+比べたモデル:
+
+- Transolver の表面モデル（SURF-15、16）: SURF-02 と同じ設定。
+- パラメータ回帰、NACA のパラメータ（SURF-17、18）: SURF-10 と同じ入力。学習で一定の入力（系列、4桁系だけのときの反り返り）は、割らずに平均を引くだけにした（`config.json` の `constant_input_features`）。
+- パラメータ回帰、形の特徴量（SURF-19、20、21）: 翼面の点から、翼弦方向の余弦分布の20点で厚さとキャンバーを測り（法線が内向きなので、法線の y 成分が負の点を上面とした）、一様流の速さ・迎角と合わせた42成分を入力にした。ケース名を使わないので、どんな形にも使える。全1000ケースで負の厚さはなかった。
+
+コードは [PR #4](https://github.com/pandorobo11/transolver/pull/4)（commit `a025874`）。値は SURF-15〜21 の `-metrics.json`。**表面のみの独自の設定で、論文の数値とは比較できない。テストの翼型は学習データにない系列（外挿）。**
+
+| 指標（中央値） | Transolver | パラメータ回帰、NACA のパラメータ | パラメータ回帰、形の特徴量 |
+|---|---|---|---|
+| `naca4to5` Cl の相対誤差 | 0.043 | 0.213 | **0.0056** |
+| `naca4to5` Cd の相対誤差 | 0.380 | 0.069 | **0.0048** |
+| `naca4to5` Cd の順位相関 | 0.16 | 0.99 | 1.00 |
+| `naca5to4` Cl の相対誤差 | 0.063 | 0.180 | **0.053** |
+| `naca5to4` Cd の相対誤差 | 0.629 | 0.051 | **0.015** |
+| `naca5to4` Cd の順位相関 | 0.29 | 0.92 | 0.96 |
+| `full`（参考） Cl / Cd の相対誤差 | 0.031 / 0.18（SURF-02、3回の平均） | 0.0056 / 0.0032（SURF-10） | 0.0041 / 0.0031（SURF-21） |
+
+Transolver の Cp・Cf の相対L2誤差（中央値）は、`naca4to5` で 0.077・0.074、`naca5to4` で 0.119・0.106（`full` の SURF-02 は 0.044・0.047）。
+
+わかったこと:
+
+- NACA のパラメータを入力にした回帰は、別の系列には通用しない（Cl の誤差 18〜21%）。パラメータの意味が系列で違うためで、予想どおり。
+- 翼面から測った厚さとキャンバーを入力にすると、系列をまたいでも Cl・Cd を高い精度で予測できた（4桁系→5桁系で Cl 0.56%、Cd 0.48%）。`full` でも NACA のパラメータと同等以上（SURF-21）。
+- Transolver は、系列をまたぐと Cp・Cf の誤差が `full` の約2〜3倍になる。Cl は形の特徴量の回帰とほぼ同じ（5桁系→4桁系）か悪く、Cd は大きく劣る（38〜63%）。学習ケースが `full` の約半分（341、380）であることも誤差を大きくしている可能性があり、系列の違いだけの影響とは分けられない。
+- 5桁系→4桁系は、どのモデルでも逆向きより誤差が大きい。4桁系のテストには、5桁系の学習データにない形（キャンバーの最大位置が後ろ寄りなど）が含まれると見込む（確かめていない）。
+- この範囲（NACA 系の中での系列の違い）では、形をうまく数値化できれば、Cl・Cd の予測に場を予測するモデルは要らない。場を予測するモデルが有利になるのは、厚さとキャンバーのような少数の特徴量では表しきれない形（大きく異なる形、複数の要素など）のはずだが、AirfRANS では確かめられない。
+
+時間とメモリ: SURF-15 は1エポック平均7.2秒、学習全体 1,448秒、ピークメモリ 2.2 GB。SURF-16 は8.2秒、1,644秒、2.1 GB。パラメータ回帰は1本22〜45秒。いずれも MPS、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定、1つずつ順番に実行した。
+
 ## 評価
 
 | 指標 | 内容 |
@@ -557,6 +603,21 @@ done
 $PY docs/reports/20261029-surface-cp-cf/slice_assignment.py data/airfrans_surface \
   external/Transolver/Airfoil-Design-AirfRANS results/surface/SURF-02 results/surface/analysis/slices \
   airFoil2D_SST_65.163_5.647_2.202_2.997_5.159 airFoil2D_SST_78.501_14.686_1.641_0.0_17.637
+# SURF-15〜21（PR #4 のコード）: 系列をまたぐタスク
+for spec in "SURF-17 naca4to5 naca" "SURF-18 naca5to4 naca" "SURF-19 naca4to5 geometry" \
+            "SURF-20 naca5to4 geometry" "SURF-21 full geometry"; do
+  set -- ${=spec}
+  $PY -m surfcpcf.param_regression --task $2 --features $3 --surface data/airfrans_surface \
+    --out results/surface/$1 --epochs 2000 --seed 0
+done
+for spec in "SURF-15 naca4to5" "SURF-16 naca5to4"; do
+  set -- ${=spec}
+  caffeinate -i $PY -m surfcpcf.train --task $2 --model transolver --n-hidden 128 --n-layers 5 --slice-num 32 \
+    --surface data/airfrans_surface --transolver-dir external/Transolver/Airfoil-Design-AirfRANS \
+    --out results/surface/$1 --epochs 200 --lr 1e-3 --seed 0 --val-every 10
+  $PY -m surfcpcf.evaluate --run results/surface/$1 --surface data/airfrans_surface \
+    --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
+done
 ```
 
 実装は、Claude が書いた計画をもとに Codex（gpt-6.1-sol、推論レベル high）が書き、Claude が差分のレビューと検証の再実行をした。
