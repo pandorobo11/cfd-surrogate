@@ -1,0 +1,102 @@
+{
+  "task": "full",
+  "official_test_split": "full_test",
+  "cases": 200,
+  "epochs": 200,
+  "model": {
+    "name": "transolver",
+    "n_hidden": 128,
+    "n_layers": 5,
+    "slice_num": 32
+  },
+  "setting": "surface only Cp/Cf; surrogate, not a validated flow solution",
+  "point_subsampling": false,
+  "device": "mps",
+  "torch_version": "2.15.0",
+  "PYTORCH_ENABLE_MPS_FALLBACK": null,
+  "inference_and_integration_seconds": 2.116861042100936,
+  "training_range": {
+    "uinf": [
+      31.283,
+      93.592
+    ],
+    "aoa_deg": [
+      -4.934,
+      14.926
+    ],
+    "nu": [
+      1.5498148291427463e-05,
+      1.5498148291427463e-05
+    ],
+    "reynolds_unit_chord": [
+      2018499.204663286,
+      6038914.987783981
+    ]
+  },
+  "field_relative_l2": {
+    "cp": {
+      "mean": 0.3587004539986002,
+      "median": 0.3003438687742377,
+      "nonfinite_count": 0
+    },
+    "cf": {
+      "mean": 0.1759210480337612,
+      "median": 0.15520764000659135,
+      "nonfinite_count": 0
+    }
+  },
+  "coefficient_relative_error": {
+    "cd": {
+      "mean": 0.13504122738787966,
+      "median": 0.08935168539546748,
+      "nonfinite_count": 0
+    },
+    "cdp": {
+      "mean": 0.4875543805238926,
+      "median": 0.2533996812439195,
+      "nonfinite_count": 0
+    },
+    "cdv": {
+      "mean": 0.07776749757333111,
+      "median": 0.057267136976724545,
+      "nonfinite_count": 0
+    },
+    "cl": {
+      "mean": 0.34146363897835735,
+      "median": 0.11302668820191497,
+      "nonfinite_count": 0
+    },
+    "clp": {
+      "mean": 0.34138784764057073,
+      "median": 0.11343669286773461,
+      "nonfinite_count": 0
+    },
+    "clv": {
+      "mean": 3.3531470273168327,
+      "median": 0.9347709843744265,
+      "nonfinite_count": 0
+    }
+  },
+  "spearman": {
+    "cl": {
+      "statistic": 0.9818165454136354,
+      "pvalue": 7.55426807115605e-145
+    },
+    "cd": {
+      "statistic": 0.751958298957474,
+      "pvalue": 1.1015651181794806e-37
+    }
+  },
+  "extrapolation_counts": {
+    "reynolds_extrapolation": 0,
+    "aoa_extrapolation": 1,
+    "unseen_geometry_parameters": 200
+  },
+  "geometry_extrapolation_rule": "case-name geometry parameter tuple absent from training; not a geometric distance test",
+  "relative_error_zero_policy": "Exact zero reference with nonzero error is infinity (CSV); nonfinite aggregate is null (JSON), with count.",
+  "representatives": {
+    "minimum": "airFoil2D_SST_52.518_12.114_1.135_6.268_0.0_5.676",
+    "median (upper middle)": "airFoil2D_SST_44.995_5.582_0.618_7.104_1.0_16.596",
+    "maximum": "airFoil2D_SST_92.85_-3.031_6.083_2.008_9.267"
+  }
+}

@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01〜04・SURF-06 は実行済み（2026-10-30〜31。SURF-02・06 は乱数の種を変えて各3回）。ほかは未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜14 は実行済み（2026-10-30〜31。SURF-02・06 は乱数の種を変えて各3回。SURF-13・14 は10月31日に計画に加えた力係数の損失の実行）。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -98,6 +98,12 @@ Transolver の大きさとエポック数は公式の AirfRANS 設定（層数8�
 | SURF-06-s2 | 学習と評価が完了 | 点ごとの MLP | `full` | 720 | 5（隠れ層） | 490 | — | 200（種2） | 2026-10-31 01:24 |
 | SURF-03 | 学習と評価が完了 | Transolver | `reynolds` | 454（504 から1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-31 07:50 |
 | SURF-04 | 学習と評価が完了 | Transolver | `aoa` | 724（804 から1割を検証に回す） | 5 | 128 | 32 | 200 | 2026-10-31 08:22 |
+| SURF-09 | 学習と評価が完了 | パラメータ回帰 | `scarce` | 180 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 11:11 |
+| SURF-10 | 学習と評価が完了 | パラメータ回帰 | `full` | 720 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 11:11 |
+| SURF-11 | 学習と評価が完了 | パラメータ回帰 | `reynolds` | 454 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 11:12 |
+| SURF-12 | 学習と評価が完了 | パラメータ回帰 | `aoa` | 724 | 3（隠れ層） | 128 | — | 2000 | 2026-10-31 11:13 |
+| SURF-13 | 学習と評価が完了 | Transolver、Cl・Cd の損失の重み1 | `full` | 720 | 5 | 128 | 32 | 200 | 2026-10-31 11:14 |
+| SURF-14 | 学習と評価が完了 | Transolver、Cl・Cd の損失の重み0.1 | `full` | 720 | 5 | 128 | 32 | 200 | 2026-10-31 12:07 |
 
 共通の条件は上の表のとおり。`unified_pos` は公式と同じ1にした（正規化前の座標から格子までの距離を特徴に加える）。乱数の種は0。テストは `full_test` の200ケース、表面の全点。
 
@@ -362,6 +368,58 @@ SURF-04 の保存したモデルでテストを予測し直し、迎角が学習
 
 時間とメモリ: SURF-03 は1エポック平均9.3秒、学習全体 1,859秒（約31分）、ピークメモリ 2.4 GB。SURF-04 は1エポック平均15.0秒、学習全体 3,000秒（50分）、ピークメモリ 2.9 GB。評価はどちらも数秒。MPS が確保したメモリは 0.17〜0.18 GiB。`PYTORCH_ENABLE_MPS_FALLBACK` は未設定。1つずつ順番に実行した。
 
+### SURF-09〜12 の結果（パラメータ回帰）
+
+ケースごとに1回、一様流の速さ、迎角、翼型の系列（NACA 4桁系か5桁系か）、翼型のパラメータ4つ（ケース名から読む。4桁系は3つなので、反り返りの位置に0を入れて4つにそろえる）の7成分から、公式の Cl・Cd（`force_coefficient(reference=True)`）を直接予測した。全結合 MLP（隠れ層の幅128、3層、GELU、パラメータ 34,306）、Adam、OneCycleLR、ミニバッチ32、2000エポック、種0。入力と目標は学習ケースの平均と標準偏差で正規化した。分割とテストは Transolver の実行と同じ。コードは [PR #3](https://github.com/pandorobo11/transolver/pull/3)（commit `b4923b8`）の `surfcpcf.param_regression`。値は SURF-09〜12 の `-metrics.json`。**表面のみの独自の設定で、論文の数値とは比較できない。**
+
+| タスク | パラメータ回帰 Cl / Cd の相対誤差（中央値） | 同じタスクの Transolver の表面モデル Cl / Cd（中央値） | パラメータ回帰の順位相関 Cl / Cd |
+|---|---|---|---|
+| `scarce`（SURF-09 と SURF-01） | 0.018 / 0.017 | 0.145 / 0.888 | 0.995 / 0.812 |
+| `full`（SURF-10 と SURF-02 の3回の平均） | 0.0056 / 0.0032 | 0.031 / 0.18 | 0.9998 / 0.979 |
+| `reynolds`（SURF-11 と SURF-03、全ケースが外挿） | 0.017 / 0.011 | 0.088 / 0.393 | 0.999 / 0.958 |
+| `aoa`（SURF-12 と SURF-04、全ケースが外挿） | 0.011 / 0.012 | 0.090 / 0.335 | 0.999 / 0.958 |
+
+学習は1タスク12〜45秒（MPS）。`full` の同じ学習を CPU で行うと13秒で、誤差はほぼ同じだった（Cl 0.0054、Cd 0.0030）。
+
+わかったこと:
+
+- Cl・Cd を求めるだけなら、ケースごとのパラメータ回帰が、Cp・Cf を予測して積分する Transolver の表面モデルよりはるかに正確だった。`full` で Cl は約6分の1、Cd は約60分の1の誤差。外挿のタスクでも同じ傾向。
+- AirfRANS の Cl・Cd は、流れの条件と NACA のパラメータの7つの値のなめらかな関数で、数百ケースで十分に近似できる。場を予測するモデルの利点は、Cp・Cf の分布そのもの（前縁の負圧のピーク、剥離の位置）が分かることと、パラメータで表せない形状にも使えることにある。ただし後者は、AirfRANS が NACA 系だけなので、ここでは確かめられない。
+- パラメータ回帰は学習1回ずつの結果。
+
+### SURF-13・SURF-14 の結果（Cl・Cd の損失）
+
+SURF-02 と同じ設定に、予測の Cp・Cf を翼面で積分した Cl・Cd の誤差を損失として加えた。損失 = 場の MSE + 重み × mean(((C_pred − C_true)/s_C)²)。C_true は正解の Cp・Cf を同じ方法で積分した値、s_C は学習ケースでの標準偏差（Cl 0.570、Cd 0.00507）。重みは SURF-13 が1、SURF-14 が0.1。コードは PR #3 の `--force-loss-weight`。重み0の学習が変更前のコードと学習の損失・検証の値・保存した重みまで一致することは確かめてある。
+
+| 指標（中央値） | SURF-02（損失なし、3回の平均 ± 標準偏差） | SURF-14（重み0.1） | SURF-13（重み1） |
+|---|---|---|---|
+| Cp の相対L2誤差 | 0.044 ± 0.005 | 0.300 | 0.762 |
+| Cf の相対L2誤差 | 0.047 ± 0.003 | 0.155 | 0.336 |
+| Cl の相対誤差 | 0.031 ± 0.003 | 0.113 | 0.175 |
+| Cd の相対誤差 | 0.18 ± 0.03 | 0.089 | 0.068 |
+| Cd の圧力成分の相対誤差 | 0.57 ± 0.08 | 0.253 | 0.362 |
+| Cd の摩擦成分の相対誤差 | 0.012 ± 0.003 | 0.057 | 0.140 |
+| Cl の順位相関 | 0.998 | 0.982 | 0.957 |
+| Cd の順位相関 | 0.48 ± 0.06 | 0.752 | 0.855 |
+
+学習の途中（検証80ケース）:
+
+| エポック | SURF-14 学習の場の損失 / 力の損失 | SURF-14 検証 Cp / Cf の MSE | SURF-13 学習の場の損失 / 力の損失 | SURF-13 検証 Cp / Cf の MSE |
+|---|---|---|---|---|
+| 1 | 0.899 / 1.64 | 0.860 / 0.958 | 0.992 / 1.53 | 0.860 / 0.859 |
+| 100 | 0.257 / 1.25 | 0.234 / 0.137 | 0.545 / 0.691 | 0.544 / 0.309 |
+| 200 | 0.0263 / 0.0609 | 0.0360 / 0.0226 | 0.209 / 0.107 | 0.270 / 0.103 |
+
+SURF-02 の最後の検証の MSE は Cp 0.0023、Cf 0.0061（学習の場の損失 0.00075）。
+
+わかったこと:
+
+- Cl・Cd の損失を加えると、Cd の誤差は下がる（中央値 0.18 → 0.089、0.068）が、Cp・Cf・Cl の誤差が大きく上がる。場の学習が進まなくなる（最後の学習の場の損失が SURF-02 の約35倍、280倍）。
+- Cd の標準偏差が小さい（0.005）ので、正規化した Cd の誤差の勾配が大きく、場の損失より強く効いていると見込む。重みをさらに小さくする、場の学習のあとに加える、などは試していない。
+- Cd も、パラメータ回帰（SURF-10、中央値 0.0032）には遠く及ばない。この設定では、Cd を改善する方法として力係数の損失は割に合わない。
+
+時間とメモリ: SURF-13 は1エポック平均15.9秒、学習全体 3,173秒、ピークメモリ 3.0 GB。SURF-14 は16.2秒、3,243秒、2.9 GB。いずれも MPS、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定、1つずつ順番に実行した。
+
 ## 評価
 
 | 指標 | 内容 |
@@ -447,6 +505,20 @@ $PY docs/reports/20261029-surface-cp-cf/cdp_by_region.py data/airfrans_surface \
   external/Transolver/Airfoil-Design-AirfRANS results/surface/SURF-04 12.451
 $PY docs/reports/20261029-surface-cp-cf/cdp_by_region.py data/airfrans_surface \
   external/Transolver/Airfoil-Design-AirfRANS results/surface/SURF-02 -90
+# SURF-09〜12（PR #3 のコード）: パラメータ回帰。学習の最後に評価まで行う
+for spec in "SURF-09 scarce" "SURF-10 full" "SURF-11 reynolds" "SURF-12 aoa"; do
+  set -- ${=spec}
+  $PY -m surfcpcf.param_regression --task $2 --surface data/airfrans_surface --out results/surface/$1 --epochs 2000 --seed 0
+done
+# SURF-13・14（PR #3 のコード）: Cl・Cd の損失。重みだけを変える
+for spec in "SURF-13 1" "SURF-14 0.1"; do
+  set -- ${=spec}
+  caffeinate -i $PY -m surfcpcf.train --task full --model transolver --n-hidden 128 --n-layers 5 --slice-num 32 \
+    --surface data/airfrans_surface --transolver-dir external/Transolver/Airfoil-Design-AirfRANS \
+    --out results/surface/$1 --epochs 200 --lr 1e-3 --seed 0 --val-every 10 --force-loss-weight $2 --force-loss-coeffs cl,cd
+  $PY -m surfcpcf.evaluate --run results/surface/$1 --surface data/airfrans_surface \
+    --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
+done
 ```
 
 実装は、Claude が書いた計画をもとに Codex（gpt-6.1-sol、推論レベル high）が書き、Claude が差分のレビューと検証の再実行をした。
