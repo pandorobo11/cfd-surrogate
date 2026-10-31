@@ -87,6 +87,38 @@ operation only; they do not establish convergence or physical validation.
 Sources: AirfRANS 0.1.5.1 and the official Transolver AirfRANS implementation.
 See the repository research plan for acquisition, version and license records.
 
+## NACA family holdout tasks
+
+Both surface learning and case-level regression accept `--task naca4to5` and
+`--task naca5to4`. Family is determined from the three (four-digit) or four
+(five-digit, including reflex) geometry parameters after speed and angle in the
+case name. These are custom family holdouts derived from the official `full`
+lists, not additional official AirfRANS benchmark tasks. The four existing
+tasks (`full`, `scarce`, `reynolds`, `aoa`) retain their original splits.
+
+- `naca4to5`: filter `full_train` to four-digit cases (378), then use its final
+  `int(0.1 * 378)` cases for validation: 341 train / 37 validation. Test on the
+  89 five-digit cases of `full_test`.
+- `naca5to4`: filter `full_train` to five-digit cases (422): 380 train /
+  42 validation. Test on the 111 four-digit cases of `full_test`.
+
+Filtering preserves manifest order. All test cases have unseen geometry
+parameter tuples; this flag still measures tuple membership, not geometric
+distance. Family holdout evaluates transfer between these two NACA families;
+it alone cannot establish generalization to arbitrary non-NACA shapes.
+Evaluation reads the task from the saved config. Optional `evaluate --task`
+must agree with it. Metrics label the subset as `full_test (5-digit only)` or
+`full_test (4-digit only)`.
+
+```sh
+$PY -m surfcpcf.train --task naca4to5 --surface data/airfrans_surface \
+  --transolver-dir external/Transolver/Airfoil-Design-AirfRANS \
+  --out results/surface/SMOKE-FAM-T --epochs 2 --val-every 1
+$PY -m surfcpcf.evaluate --run results/surface/SMOKE-FAM-T \
+  --surface data/airfrans_surface \
+  --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
+```
+
 ## Integrated force loss
 
 ```sh
@@ -144,7 +176,8 @@ $PY -m surfcpcf.param_regression --task full --surface data/airfrans_surface \
 # --epochs 2000 --lr 1e-3 --batch-size 32 --n-hidden 128 --n-layers 3 --seed 0
 ```
 
-Each case produces one seven-component input in this order:
+With `--features naca` (the default), each case produces the same original
+seven-component input in this order:
 `[Uinf, aoa_deg, series, p1, p2, p3_or_zero, thickness]`. `series=0` denotes
 four-digit NACA with parameters `[p1,p2,0,p3]`; `series=1` denotes five-digit
 NACA with `[p1,p2,p3,p4]`. Thus thickness is always last, and the five-digit
@@ -172,3 +205,44 @@ are reported for this model. Saved training ranges and per-case flags mark
 Reynolds/angle extrapolation and unseen geometry parameter tuples. A 200-epoch
 smoke run verifies this pipeline only; it is not evidence of convergence or a
 validated flow solution, and timings must be kept separate from accuracy.
+
+### Measured geometry features
+
+`--features geometry --stations K` replaces NACA parameters with measurements
+from NPZ `pos` and `normal`; K defaults to 20. Input order is
+`[Uinf, aoa_deg, thickness_1, ..., thickness_K, camber_1, ..., camber_K]`
+(42 components at the default). Speed and angle come from index metadata;
+shape extraction does not parse or use the case name. Targets, normalization,
+optimizer, scheduler and evaluation metrics are unchanged.
+
+For each case, x is mapped to `[0, 1]` using its minimum and maximum. The
+existing unit-chord y coordinates are retained. At
+`x_k = 0.5 * (1 - cos(pi * k / (K + 1)))`, k=1..K, upper and lower y are
+linearly interpolated with `np.interp`. Inward normals identify upper points
+by `normal_y < 0`, lower points by `normal_y > 0`; zero-y normals are omitted.
+Repeated x coordinates on a side use the outer envelope (maximum upper y,
+minimum lower y), then unique x values are sorted. Each side needs at least
+two distinct x coordinates. Outside a side's sampled x range, `np.interp`
+holds its endpoint y. Thickness is `y_upper - y_lower`; camber is
+`(y_upper + y_lower) / 2`. Negative thickness is retained, not clipped, so it
+can be audited. Shapes must use the same chord alignment and inward-normal
+convention; the extractor does not rotate arbitrary coordinates.
+
+Config records `features`, `stations`, the ordered `input_definition`, and
+`station_x` for geometry inputs; metrics also identify `model.features`.
+`--stations` must be positive and has no effect on NACA inputs.
+
+```sh
+$PY -m surfcpcf.param_regression --task naca4to5 --features geometry \
+  --surface data/airfrans_surface --out results/surface/SMOKE-FAM-PG --epochs 200
+$PY -m surfcpcf.param_regression --task naca4to5 --features naca \
+  --surface data/airfrans_surface --out results/surface/SMOKE-FAM-PN --epochs 200
+$PY -m surfcpcf.param_regression --task full --features geometry \
+  --surface data/airfrans_surface --out results/surface/SMOKE-FULL-PG --epochs 200
+```
+
+These bounded runs verify execution only. The NACA family indicator and the
+five-digit reflex input are constant in four-digit training, so transferring
+that baseline to five-digit inputs can produce extreme normalized values
+under the unchanged `std + 1e-8` rule. Report this behavior explicitly when
+interpreting holdout errors; do not silently alter baseline normalization.

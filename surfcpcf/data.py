@@ -10,14 +10,41 @@ from torch.utils.data import Dataset
 
 from .torch_forces import coefficients_from_cp_cf
 
+TASKS = ("scarce", "full", "reynolds", "aoa", "naca4to5", "naca5to4")
+
+
+def naca_family(name):
+    """Return 4 or 5 from the three or four AirfRANS geometry parameters."""
+    parts = name.split("_")
+    if parts[:2] != ["airFoil2D", "SST"] or len(parts) not in (7, 8):
+        raise ValueError(f"Invalid NACA case name: {name}")
+    values = np.asarray([float(value) for value in parts[2:]], dtype=np.float64)
+    if not np.isfinite(values).all():
+        raise ValueError(f"Nonfinite case parameters: {name}")
+    if len(parts) == 8 and values[4] not in (0., 1.):
+        raise ValueError(f"Five-digit reflex parameter must be 0 or 1: {name}")
+    return len(parts) - 3
+
+
+def test_split_label(task):
+    if task in ("naca4to5", "naca5to4"):
+        return f"full_test ({5 if task == 'naca4to5' else 4}-digit only)"
+    return "full_test" if task == "scarce" else task + "_test"
+
 
 def split_cases(manifest, task):
-    train = list(manifest[task + "_train"])
+    if task in ("naca4to5", "naca5to4"):
+        family = 4 if task == "naca4to5" else 5
+        train = [name for name in manifest["full_train"] if naca_family(name) == family]
+        test = [name for name in manifest["full_test"] if naca_family(name) != family]
+    else:
+        train = list(manifest[task + "_train"])
+        test = list(manifest["full_test" if task == "scarce" else task + "_test"])
     n = int(0.1 * len(train))
     # Avoid Python's [:-0] returning an empty training set on tiny fixtures.
     return {"train": train[:-n] if n else train,
             "val": train[-n:] if n else [],
-            "test": list(manifest["full_test" if task == "scarce" else task + "_test"])}
+            "test": test}
 
 
 def load_case(surface, name):
