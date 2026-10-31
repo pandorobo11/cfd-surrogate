@@ -12,7 +12,7 @@ import time
 import numpy as np
 import torch
 
-from .data import Normalization, SurfaceDataset, load_case, read_splits, to_device
+from .data import TASKS, Normalization, SurfaceDataset, load_case, read_splits, to_device
 from .model import MODELS, build_model, select_device
 from .geometry import COEFFICIENTS, relative_error
 from .metrics import training_ranges
@@ -84,7 +84,7 @@ def validation_mse(model, dataset, device, norm=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--task", choices=("scarce", "full", "reynolds", "aoa"), default="scarce")
+    parser.add_argument("--task", choices=TASKS, default="scarce")
     parser.add_argument("--surface", type=Path, default=Path("data/airfrans_surface"))
     parser.add_argument("--transolver-dir", type=Path, default=Path("external/Transolver/Airfoil-Design-AirfRANS"))
     parser.add_argument("--out", type=Path, default=Path("results/surface/SURF-01"))

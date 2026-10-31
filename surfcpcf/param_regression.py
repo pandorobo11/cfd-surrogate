@@ -1,4 +1,4 @@
-"""Case-level NACA parameter MLP baseline for official reference Cl and Cd."""
+"""Case-level NACA or measured-geometry MLP baseline for reference Cl and Cd."""
 
 import argparse
 import csv
@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from .data import Normalization, load_case, read_splits
+from .data import TASKS, Normalization, load_case, naca_family, read_splits, test_split_label
 from .geometry import COEFFICIENTS, relative_error
 from .metrics import Extrapolation, coefficient_metrics, coefficient_row, training_ranges
 from .model import select_device
@@ -21,47 +21,107 @@ from .train import seed_all, synchronize
 
 INPUTS = ("uinf", "aoa_deg", "naca_series_4_digit_0_5_digit_1", "p1", "p2", "p3_or_zero", "thickness")
 TARGETS = ("cl", "cd")
+CONSTANT_INPUT_STD_THRESHOLD = 1e-6
+
+
+def fit_normalization(x, y):
+    """Fit training-only statistics, centering near-constant inputs without scaling."""
+    x_std = x.std(0)
+    constant_inputs = x_std < CONSTANT_INPUT_STD_THRESHOLD
+    norm = Normalization(x.mean(0), np.where(constant_inputs, 1.0, x_std + 1e-8),
+                         y.mean(0), y.std(0) + 1e-8)
+    return norm, constant_inputs
 
 
 def parameter_features(name, metadata):
     """Parse the case name; verify its flow conditions against index metadata."""
+    series = naca_family(name) - 4
     parts = name.split("_")
-    if parts[:2] != ["airFoil2D", "SST"] or len(parts) not in (7, 8):
-        raise ValueError(f"Invalid NACA case name: {name}")
     values = np.asarray([float(value) for value in parts[2:]], dtype=np.float64)
-    if not np.isfinite(values).all():
-        raise ValueError(f"Nonfinite case parameters: {name}")
     if not np.allclose(values[:2], [metadata["uinf"], metadata["aoa_deg"]], rtol=0, atol=1e-8):
         raise ValueError(f"Case name and index flow conditions disagree: {name}")
     parameters = values[2:]
-    series = len(parameters) - 3
     if series == 0:
         parameters = [parameters[0], parameters[1], 0., parameters[2]]
-    elif parameters[2] not in (0., 1.):
-        raise ValueError(f"Five-digit reflex parameter must be 0 or 1: {name}")
     return np.asarray([metadata["uinf"], metadata["aoa_deg"], series, *parameters], dtype=np.float64)
 
 
+def cosine_stations(stations):
+    if not isinstance(stations, (int, np.integer)) or isinstance(stations, bool) or stations < 1:
+        raise ValueError("stations must be a positive integer")
+    return 0.5 * (1 - np.cos(np.pi * np.arange(1, stations + 1) / (stations + 1)))
+
+
+def geometry_features(pos, normal, stations=20):
+    """Thickness and camber at cosine stations, using inward point normals.
+
+    Normalize x only; y is already in unit-chord coordinates. For duplicate x
+    on a side keep its outer envelope (upper max, lower min). Zero-y normals
+    are omitted; np.interp holds endpoint values outside each side's support.
+    Negative thickness is retained for auditing, never clipped.
+    """
+    station_x = cosine_stations(stations)
+    pos, normal = np.asarray(pos, dtype=np.float64), np.asarray(normal, dtype=np.float64)
+    if pos.ndim != 2 or pos.shape[1] != 2 or normal.shape != pos.shape or len(pos) < 2:
+        raise ValueError("Expected matching (N, 2) positions and normals")
+    if not np.isfinite(pos).all() or not np.isfinite(normal).all():
+        raise ValueError("Positions and normals must be finite")
+    chord = np.ptp(pos[:, 0])
+    if chord <= 0:
+        raise ValueError("Chord must be positive")
+    x = (pos[:, 0] - pos[:, 0].min()) / chord
+    surfaces = []
+    for upper in (True, False):
+        mask = normal[:, 1] < 0 if upper else normal[:, 1] > 0
+        unique_x, inverse = np.unique(x[mask], return_inverse=True)
+        if len(unique_x) < 2:
+            raise ValueError("Each surface needs at least two distinct x coordinates")
+        y = np.full(len(unique_x), -np.inf if upper else np.inf)
+        (np.maximum.at if upper else np.minimum.at)(y, inverse, pos[mask, 1])
+        surfaces.append(np.interp(station_x, unique_x, y))
+    upper, lower = surfaces
+    return upper - lower, (upper + lower) / 2
+
+
+def input_definition(features="naca", stations=20):
+    if features == "naca":
+        return INPUTS
+    if features != "geometry":
+        raise ValueError(f"Unknown features: {features}")
+    cosine_stations(stations)
+    return ("uinf", "aoa_deg", *(f"thickness_{k}" for k in range(1, stations + 1)),
+            *(f"camber_{k}" for k in range(1, stations + 1)))
+
+
 class ParameterMLP(nn.Module):
-    def __init__(self, n_hidden=128, n_layers=3):
+    def __init__(self, n_hidden=128, n_layers=3, n_inputs=7):
         super().__init__()
         if n_hidden < 1 or n_layers < 1:
             raise ValueError("Hidden width and layer count must be positive")
         layers = []
         for i in range(n_layers):
-            layers.extend((nn.Linear(7 if i == 0 else n_hidden, n_hidden), nn.GELU()))
+            layers.extend((nn.Linear(n_inputs if i == 0 else n_hidden, n_hidden), nn.GELU()))
         self.network = nn.Sequential(*layers, nn.Linear(n_hidden, 2))
 
     def forward(self, x):
         return self.network(x)
 
 
-def load_arrays(surface, names, metadata):
-    x = np.stack([parameter_features(name, metadata[name]) for name in names])
+def load_arrays(surface, names, metadata, features="naca", stations=20):
+    input_definition(features, stations)
+    if features == "naca":
+        x = np.stack([parameter_features(name, metadata[name]) for name in names])
+    else:
+        rows = []
+        for name in names:
+            case = load_case(surface, name)
+            thickness, camber = geometry_features(case["pos"], case["normal"], stations)
+            rows.append(np.r_[metadata[name]["uinf"], metadata[name]["aoa_deg"], thickness, camber])
+        x = np.stack(rows)
     y = np.stack([load_case(surface, name)["reference"][[COEFFICIENTS.index(k) for k in TARGETS]]
                   for name in names])
-    if not np.isfinite(y).all():
-        raise ValueError("Nonfinite reference coefficients")
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        raise ValueError("Nonfinite inputs or reference coefficients")
     return x, y
 
 
@@ -88,7 +148,7 @@ def evaluate(model, x, truth, names, metadata, norm, config, device, out):
         writer.writeheader()
         writer.writerows(rows)
     metrics = dict(task=config["task"],
-                   official_test_split="full_test" if config["task"] == "scarce" else config["task"] + "_test",
+                   official_test_split=test_split_label(config["task"]),
                    cases=len(rows), epochs=config["epochs"],
                    model={key: config[key] for key in ("n_hidden", "n_layers")},
                    setting=config["setting"], device=str(device), torch_version=torch.__version__,
@@ -97,13 +157,16 @@ def evaluate(model, x, truth, names, metadata, norm, config, device, out):
                    training_range=dict(config["training_range"], reynolds_unit_chord=extrapolation.re_range),
                    **coefficient_metrics(rows, TARGETS))
     metrics["model"]["name"] = "param_regression"
+    metrics["model"]["features"] = config.get("features", "naca")
     (out / "metrics.json").write_text(json.dumps(metrics, indent=2, allow_nan=False) + "\n")
     return metrics
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--task", choices=("full", "scarce", "reynolds", "aoa"), default="full")
+    parser.add_argument("--task", choices=TASKS, default="full")
+    parser.add_argument("--features", choices=("naca", "geometry"), default="naca")
+    parser.add_argument("--stations", type=int, default=20)
     parser.add_argument("--surface", type=Path, default=Path("data/airfrans_surface"))
     parser.add_argument("--out", type=Path, default=Path("results/surface/SURF-10"))
     parser.add_argument("--epochs", type=int, default=2000)
@@ -114,6 +177,8 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", choices=("mps", "cpu"))
     args = parser.parse_args(argv)
+    if args.stations < 1:
+        parser.error("stations must be positive")
     if min(args.epochs, args.batch_size, args.n_hidden, args.n_layers) < 1 or not np.isfinite(args.lr) or args.lr <= 0:
         parser.error("epochs, batch-size, hidden width, layers and lr must be positive and finite")
     args.out.mkdir(parents=True, exist_ok=True)
@@ -128,28 +193,36 @@ def main(argv=None):
     if not all(splits.values()):
         parser.error("Training, validation and test splits must be nonempty")
     metadata = json.loads((args.surface / "index.json").read_text())["cases"]
-    arrays = {split: load_arrays(args.surface, names, metadata) for split, names in splits.items()}
+    inputs = input_definition(args.features, args.stations)
+    arrays = {split: load_arrays(args.surface, names, metadata, args.features, args.stations)
+              for split, names in splits.items()}
     x, y = arrays["train"]
-    norm = Normalization(x.mean(0), x.std(0) + 1e-8, y.mean(0), y.std(0) + 1e-8)
+    norm, constant_inputs = fit_normalization(x, y)
     norm.save(args.out / "norm.npz")
     tensors = {split: tuple(torch.tensor(a, dtype=torch.float32, device=device)
                             for a in norm.transform(*pair)) for split, pair in arrays.items()}
-    model = ParameterMLP(args.n_hidden, args.n_layers).to(device)
+    model = ParameterMLP(args.n_hidden, args.n_layers, n_inputs=len(inputs)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     steps_per_epoch = math.ceil(len(x) / args.batch_size)
     total_steps = steps_per_epoch * args.epochs
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, total_steps=total_steps)
     config = {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}
     config.update(model="param_regression", parameter_count=sum(p.numel() for p in model.parameters()),
-                  input_definition=list(INPUTS), target_definition=list(TARGETS),
+                  input_definition=list(inputs), target_definition=list(TARGETS),
                   target_source="official reference (full shear vector)",
-                  normalization="training cases only; population standard deviation plus 1e-8",
-                  input_training_range={key: [float(x[:, i].min()), float(x[:, i].max())] for i, key in enumerate(INPUTS)},
+                  normalization="training cases only; population standard deviation plus 1e-8; "
+                                "input scale is 1.0 when standard deviation is below constant_input_std_threshold",
+                  constant_input_std_threshold=CONSTANT_INPUT_STD_THRESHOLD,
+                  constant_input_features=[key for key, constant in zip(inputs, constant_inputs) if constant],
+                  input_training_range={key: [float(x[:, i].min()), float(x[:, i].max())] for i, key in enumerate(inputs)},
                   training_range=training_ranges([metadata[n] for n in splits["train"]]),
                   splits=splits, device=str(device), torch_version=torch.__version__, started_at=started,
                   PYTORCH_ENABLE_MPS_FALLBACK=os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
                   scheduler_total_steps=total_steps, checkpoint_selection="final epoch; no validation selection",
-                  setting="case-level NACA parameter regression; surrogate, not a validated flow solution")
+                  setting=("case-level NACA parameter regression" if args.features == "naca" else
+                           "case-level measured geometry regression") + "; surrogate, not a validated flow solution")
+    if args.features == "geometry":
+        config["station_x"] = cosine_stations(args.stations).tolist()
     fields = ("epoch", "train_loss", "val_mse", "val_cl_rel_median", "val_cd_rel_median",
               "epoch_seconds", "mps_driver_allocated_bytes")
     with (args.out / "log.csv").open("w", newline="") as stream:

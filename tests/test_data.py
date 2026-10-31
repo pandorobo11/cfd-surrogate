@@ -2,7 +2,41 @@ import numpy as np
 import pytest
 import torch
 
-from surfcpcf.data import Normalization, SurfaceDataset, features, load_case, split_cases
+from surfcpcf.data import Normalization, SurfaceDataset, features, load_case, naca_family, split_cases
+
+
+@pytest.mark.parametrize("parameters, family", [("2_4_12", 4), ("2_3_0_12", 5), ("2_3_1_12", 5)])
+def test_naca_family(parameters, family):
+    assert naca_family(f"airFoil2D_SST_30_2_{parameters}") == family
+
+
+@pytest.mark.parametrize("name", ["other_30_2_2_4_12", "airFoil2D_SST_30_2_2_4",
+                                  "airFoil2D_SST_30_2_nan_4_12", "airFoil2D_SST_30_2_2_3_2_12"])
+def test_invalid_naca_family(name):
+    with pytest.raises(ValueError):
+        naca_family(name)
+
+
+@pytest.mark.parametrize("task, family, counts", [("naca4to5", 4, (21, 2, 7)), ("naca5to4", 5, (27, 3, 5))])
+def test_family_holdout_splits(task, family, counts):
+    # Interleaved families ensure validation is taken after filtering.
+    four = [f"airFoil2D_SST_{i+30}_2_2_4_12" for i in range(28)]
+    five = [f"airFoil2D_SST_{i+30}_2_2_3_1_12" for i in range(37)]
+    train = [n for pair in zip(four[:23], five[:23]) for n in pair] + five[23:30]
+    manifest = dict(full_train=train, full_test=four[23:] + five[30:])
+    result = split_cases(manifest, task)
+    source = [n for n in train if naca_family(n) == family]
+    n = int(.1 * len(source))
+    assert tuple(map(len, result.values())) == counts
+    assert result['train'] == source[:-n]
+    assert result['val'] == source[-n:]
+    assert result['test'] == [n for n in manifest['full_test'] if naca_family(n) != family]
+    assert all(naca_family(n) == family for n in result['train'] + result['val'])
+    assert all(naca_family(n) != family for n in result['test'])
+    from surfcpcf.metrics import Extrapolation, training_ranges
+    meta = dict(uinf=30., aoa_deg=2., nu=1.5e-5)
+    extrapolation = Extrapolation(result['train'], [meta] * len(result['train']), training_ranges([meta]))
+    assert all(extrapolation.flags(n, meta)['unseen_geometry_parameters'] for n in result['test'])
 
 
 @pytest.mark.parametrize("task", ["scarce", "full", "reynolds", "aoa"])

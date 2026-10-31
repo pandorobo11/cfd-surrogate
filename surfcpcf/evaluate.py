@@ -14,7 +14,7 @@ import numpy as np
 import torch
 
 from .checks import integration_args
-from .data import Normalization, SurfaceDataset, load_case, read_splits, to_device
+from .data import TASKS, Normalization, SurfaceDataset, load_case, read_splits, test_split_label, to_device
 from .geometry import COEFFICIENTS, coefficients_from_cp_cf
 from .metrics import Extrapolation, coefficient_metrics, coefficient_row, distribution
 from .model import build_model, select_device
@@ -57,12 +57,15 @@ def plot_cases(path, representatives, surface, predictions):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--task", choices=TASKS, help="Must match the saved run; defaults to its task")
     parser.add_argument("--run", type=Path, default=Path("results/surface/SURF-01"))
     parser.add_argument("--surface", type=Path, default=Path("data/airfrans_surface"))
     parser.add_argument("--transolver-dir", type=Path, default=Path("external/Transolver/Airfoil-Design-AirfRANS"))
     parser.add_argument("--device", choices=("mps", "cpu"))
     args = parser.parse_args(argv)
     config = json.loads((args.run / "config.json").read_text())
+    if args.task is not None and args.task != config["task"]:
+        parser.error("--task must match the saved training run")
     splits = read_splits(args.surface, config["task"])
     if splits != config["splits"]:
         raise ValueError("Manifest splits differ from the saved training run")
@@ -107,7 +110,7 @@ def main(argv=None):
     ordered = sorted(rows, key=lambda r: r["cp_relative_l2"])
     representatives = list(zip(("minimum", "median (upper middle)", "maximum"),
                                (ordered[0], ordered[len(ordered) // 2], ordered[-1])))
-    metrics = {"task": config["task"], "official_test_split": "full_test" if config["task"] == "scarce" else config["task"] + "_test",
+    metrics = {"task": config["task"], "official_test_split": test_split_label(config["task"]),
                "cases": len(rows), "epochs": config["epochs"], "model": dict(name=config.get("model", "transolver"), **{k: config[k] for k in ("n_hidden", "n_layers", "slice_num")}),
                "setting": config["setting"], "point_subsampling": False,
                "device": str(device), "torch_version": torch.__version__,
