@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜25 は実行済み（2026-10-30〜11-01。SURF-02・06 は乱数の種を変えて各3回。SURF-13〜25 は10月31日以降に計画に加えた実行）。スライスの割り当ての可視化も済み。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜26 は実行済み（2026-10-30〜11-01。SURF-02・06 は乱数の種を変えて各3回。SURF-13〜26 は10月31日以降に計画に加えた実行）。スライスの割り当ての可視化も済み。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -115,6 +115,7 @@ Transolver の大きさとエポック数は公式の AirfRANS 設定（層数8�
 | SURF-23 | 学習と評価が完了 | Transolver、学習率 5e-4 | `full` | 720 | 8 | 256 | 32 | 398 | 2026-10-31 23:55 |
 | SURF-24 | 学習と評価が完了 | Transolver、学習率 2.5e-4 | `full` | 720 | 8 | 256 | 32 | 398 | 2026-11-01 02:28 |
 | SURF-25 | 学習と評価が完了 | Transolver、学習率 5e-4 | `full` | 720 | 5 | 128 | 32 | 398 | 2026-11-01 05:02 |
+| SURF-26 | 学習と評価が完了 | 点ごとの MLP、学習率 5e-4 | `full` | 720 | 5（隠れ層） | 490 | — | 398 | 2026-11-01 15:57 |
 
 共通の条件は上の表のとおり。`unified_pos` は公式と同じ1にした（正規化前の座標から格子までの距離を特徴に加える）。乱数の種は0。テストは `full_test` の200ケース、表面の全点。
 
@@ -552,6 +553,40 @@ Transolver の Cp・Cf の相対L2誤差（中央値）は、`naca4to5` で 0.07
 | SURF-23 | 23.0秒 | 9,173秒（2.5時間） | 2.9秒 | 0.41 GiB | 3.2 GB |
 | SURF-24 | 23.1秒 | 9,181秒（2.6時間） | 2.8秒 | 0.42 GiB | 3.2 GB |
 
+### SURF-26 の結果（長い学習での点ごとの MLP）
+
+SURF-06 の点ごとの MLP（幅490・5層、パラメータ数 966,772）を、SURF-25 と同じ学習率 5e-4・398エポックで学習した。SURF-25（Transolver、縮小した大きさ、パラメータ数 967,754）とは、データ・正規化・損失・最適化・エポック数・乱数の種がすべて同じで、モデルだけが違う。コードは PR #4（commit `a025874`）。値は [SURF-26-metrics.json](SURF-26-metrics.json)。**表面のみの独自の設定で、論文の数値とは比較できない。学習は各1回（種0）。**
+
+| 指標（テスト200ケースの中央値） | SURF-02（Transolver、200エポック） | SURF-06（MLP、200エポック） | SURF-25（Transolver、398エポック） | SURF-26（MLP、398エポック） |
+|---|---|---|---|---|
+| Cp の相対L2誤差 | 0.049 | 0.335 | 0.030 | 0.324 |
+| Cf の相対L2誤差 | 0.051 | 0.349 | 0.032 | 0.338 |
+| Cl の相対誤差 | 0.033 | 0.065 | 0.018 | 0.058 |
+| Cd の相対誤差 | 0.19 | 0.57 | 0.12 | 0.54 |
+| Cd の圧力成分の相対誤差 | 0.63 | 1.76 | 0.35 | 1.61 |
+| Cd の摩擦成分の相対誤差 | 0.014 | 0.017 | 0.0075 | 0.017 |
+| Cl の順位相関 | 0.999 | 0.994 | 0.999 | 0.995 |
+| Cd の順位相関 | 0.47 | 0.07 | 0.70 | 0.05 |
+
+前縁の近くを除いた誤差（[le_error_split.py](le_error_split.py)。SURF-06 の節と同じ定義。SURF-02 は以前の値を再現した）:
+
+| 相対L2誤差（中央値） | SURF-02 | SURF-06 | SURF-25 | SURF-26 |
+|---|---|---|---|---|
+| Cp、全点 | 0.049 | 0.335 | 0.030 | 0.324 |
+| Cp、前縁の近くを除く | 0.068 | 0.111 | 0.043 | 0.095 |
+| Cf、全点 | 0.051 | 0.349 | 0.032 | 0.338 |
+| Cf、前縁の近くを除く | 0.060 | 0.073 | 0.041 | 0.066 |
+| Cp の誤差の二乗和のうち、前縁の近くの点が占める割合 | 48% | 97% | 44% | 98% |
+
+わかったこと:
+
+- 点ごとの MLP は、長く学習してもほとんど良くならない（Cp 0.335 → 0.324、Cl 0.065 → 0.058）。検証の MSE は今回もエポック50が最小（Cp 0.147）で、その後は上がり、最後は Cp 0.236 だった。MLP の誤差は学習不足ではなく、モデルの性質による。
+- Transolver は長い学習で良くなるので、差は広がった。同じ条件の SURF-25 と比べて、MLP の誤差は Cp・Cf で約11倍、Cl で約3倍、Cd で約5倍。
+- 前縁の近くを除いた誤差でも、MLP は Transolver の Cp で2.2倍、Cf で1.6倍（200エポックでは1.6倍、1.2倍）。差の大部分が前縁の負圧のピークにあることは変わらないが、前縁から離れた場所でも差がはっきりした。
+- 結論4（点どうしの情報のやり取りは前縁で効いている）は、長い学習でも成り立つ。
+
+時間とメモリ（SURF-26）: 1エポック平均2.5秒、学習全体 984秒（約16分）、評価 1.1秒、MPS が確保したメモリ 0.055 GiB、プロセスのピークメモリ 1.4 GB。MPS、`PYTORCH_ENABLE_MPS_FALLBACK` は未設定、ほかの学習と重ねずに実行した。
+
 ## 評価
 
 | 指標 | 内容 |
@@ -679,6 +714,12 @@ for spec in "SURF-22 256 8 1e-3" "SURF-23 256 8 5e-4" "SURF-24 256 8 2.5e-4" "SU
   $PY -m surfcpcf.evaluate --run results/surface/$1 --surface data/airfrans_surface \
     --transolver-dir external/Transolver/Airfoil-Design-AirfRANS
 done
+# SURF-26（PR #4 のコード）: 点ごとの MLP を SURF-25 と同じ学習率・エポック数で学習し、前縁の近くを除いた誤差を比べる
+caffeinate -i $PY -m surfcpcf.train --task full --model mlp --n-hidden 490 --n-layers 5 \
+  --surface data/airfrans_surface --out results/surface/SURF-26 --epochs 398 --lr 5e-4 --seed 0 --val-every 10
+$PY -m surfcpcf.evaluate --run results/surface/SURF-26 --surface data/airfrans_surface
+$PY docs/reports/20261029-surface-cp-cf/le_error_split.py data/airfrans_surface \
+  external/Transolver/Airfoil-Design-AirfRANS results/surface/SURF-02 results/surface/SURF-25 results/surface/SURF-26
 # 学習曲線の図
 $PY docs/reports/20261029-surface-cp-cf/training_curves.py docs/reports/20261029-surface-cp-cf/SURF-22-25-curves.png \
   SURF-02=results/surface/SURF-02 SURF-25=results/surface/SURF-25 SURF-22=results/surface/SURF-22 \
