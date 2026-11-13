@@ -1,6 +1,6 @@
 # Repository instructions
 
-- Keep this repository private unless the user explicitly requests a visibility change.
+- Treat this repository as public: every tracked file, commit message, branch, and pull request is visible to anyone. Change the repository visibility only when the user explicitly requests it.
 - Do not commit personal names, email addresses, account identifiers, absolute home paths, hostnames, device identifiers, credentials, or private remote URLs in tracked files.
 - Keep datasets, training outputs, checkpoints, raw logs, upstream clones, and machine-specific configuration in the ignored `data/`, `results/`, `external/`, and `local/` directories.
 - Do not commit dataset files or upstream source code. Record how to obtain them (URL, version or commit, license) instead.

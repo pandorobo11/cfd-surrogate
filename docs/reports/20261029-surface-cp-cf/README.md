@@ -1,6 +1,6 @@
 # 表面だけの Cp・Cf 予測（計画）
 
-作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜26 は実行済み（2026-10-30〜11-01。SURF-02・06 は乱数の種を変えて各3回。SURF-13〜26 は10月31日以降に計画に加えた実行）。スライスの割り当ての可視化も済み。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/transolver/pull/1)、main の commit `1c810f1`）。
+作成日: 2026-10-29。状態: **SURF-01〜04、06、09〜26 は実行済み（2026-10-30〜11-01。SURF-02・06 は乱数の種を変えて各3回。SURF-13〜26 は10月31日以降に計画に加えた実行）。スライスの割り当ての可視化も済み。SURF-05、07、08 は未実行**。コードは `surfcpcf/`（[PR #1](https://github.com/pandorobo11/cfd-surrogate/pull/1)、main の commit `1c810f1`）。
 
 ## 目的
 
@@ -234,7 +234,7 @@ Cp の相対L2誤差が最小・中央・最大のテストケース（破線が
 
 ### SURF-06 の結果（点ごとの MLP）
 
-SURF-02 と同じデータ、正規化、損失、最適化（Adam、OneCycleLR、200エポック、乱数の種0）で、Transolver の代わりに点ごとの MLP を学習した。MLP は各点の入力6成分（位置、一様流の速度、法線）だけから、その点の Cp・Cf を予測する。翼のほかの点の情報は使わない。隠れ層の幅490・5層・GELU で、パラメータ数は 966,772（SURF-02 の Transolver は 967,754）。コードは [PR #2](https://github.com/pandorobo11/transolver/pull/2)（commit `564cce8`）の `--model mlp`。値は [SURF-06-metrics.json](SURF-06-metrics.json)。**表面のみの独自の設定で、論文の数値とは比較できない。**
+SURF-02 と同じデータ、正規化、損失、最適化（Adam、OneCycleLR、200エポック、乱数の種0）で、Transolver の代わりに点ごとの MLP を学習した。MLP は各点の入力6成分（位置、一様流の速度、法線）だけから、その点の Cp・Cf を予測する。翼のほかの点の情報は使わない。隠れ層の幅490・5層・GELU で、パラメータ数は 966,772（SURF-02 の Transolver は 967,754）。コードは [PR #2](https://github.com/pandorobo11/cfd-surrogate/pull/2)（commit `564cce8`）の `--model mlp`。値は [SURF-06-metrics.json](SURF-06-metrics.json)。**表面のみの独自の設定で、論文の数値とは比較できない。**
 
 | 指標（中央値。括弧内は平均） | SURF-02（Transolver） | SURF-06（点ごとの MLP） |
 |---|---|---|
@@ -382,7 +382,7 @@ SURF-04 の保存したモデルでテストを予測し直し、迎角が学習
 
 ### SURF-09〜12 の結果（パラメータ回帰）
 
-ケースごとに1回、一様流の速さ、迎角、翼型の系列（NACA 4桁系か5桁系か）、翼型のパラメータ4つ（ケース名から読む。4桁系は3つなので、反り返りの位置に0を入れて4つにそろえる）の7成分から、公式の Cl・Cd（`force_coefficient(reference=True)`）を直接予測した。全結合 MLP（隠れ層の幅128、3層、GELU、パラメータ 34,306）、Adam、OneCycleLR、ミニバッチ32、2000エポック、種0。入力と目標は学習ケースの平均と標準偏差で正規化した。分割とテストは Transolver の実行と同じ。コードは [PR #3](https://github.com/pandorobo11/transolver/pull/3)（commit `b4923b8`、main へのマージは `2c26845`）の `surfcpcf.param_regression`。値は SURF-09〜12 の `-metrics.json`。**表面のみの独自の設定で、論文の数値とは比較できない。**
+ケースごとに1回、一様流の速さ、迎角、翼型の系列（NACA 4桁系か5桁系か）、翼型のパラメータ4つ（ケース名から読む。4桁系は3つなので、反り返りの位置に0を入れて4つにそろえる）の7成分から、公式の Cl・Cd（`force_coefficient(reference=True)`）を直接予測した。全結合 MLP（隠れ層の幅128、3層、GELU、パラメータ 34,306）、Adam、OneCycleLR、ミニバッチ32、2000エポック、種0。入力と目標は学習ケースの平均と標準偏差で正規化した。分割とテストは Transolver の実行と同じ。コードは [PR #3](https://github.com/pandorobo11/cfd-surrogate/pull/3)（commit `b4923b8`、main へのマージは `2c26845`）の `surfcpcf.param_regression`。値は SURF-09〜12 の `-metrics.json`。**表面のみの独自の設定で、論文の数値とは比較できない。**
 
 | タスク | パラメータ回帰 Cl / Cd の相対誤差（中央値） | 同じタスクの Transolver の表面モデル Cl / Cd（中央値） | パラメータ回帰の順位相関 Cl / Cd |
 |---|---|---|---|
@@ -481,7 +481,7 @@ AirfRANS の形状は NACA 4桁系と5桁系だけなので、「パラメータ
 - パラメータ回帰、NACA のパラメータ（SURF-17、18）: SURF-10 と同じ入力。学習で一定の入力（系列、4桁系だけのときの反り返り）は、割らずに平均を引くだけにした（`config.json` の `constant_input_features`）。
 - パラメータ回帰、形の特徴量（SURF-19、20、21）: 翼面の点から、翼弦方向の余弦分布の20点で厚さとキャンバーを測り（法線が内向きなので、法線の y 成分が負の点を上面とした）、一様流の速さ・迎角と合わせた42成分を入力にした。ケース名を使わないので、どんな形にも使える。全1000ケースで負の厚さはなかった。
 
-コードは [PR #4](https://github.com/pandorobo11/transolver/pull/4)（commit `a025874`）。値は SURF-15〜21 の `-metrics.json`。**表面のみの独自の設定で、論文の数値とは比較できない。テストの翼型は学習データにない系列（外挿）。**
+コードは [PR #4](https://github.com/pandorobo11/cfd-surrogate/pull/4)（commit `a025874`）。値は SURF-15〜21 の `-metrics.json`。**表面のみの独自の設定で、論文の数値とは比較できない。テストの翼型は学習データにない系列（外挿）。**
 
 | 指標（中央値） | Transolver | パラメータ回帰、NACA のパラメータ | パラメータ回帰、形の特徴量 |
 |---|---|---|---|

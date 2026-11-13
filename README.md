@@ -1,6 +1,6 @@
-# Transolver 作業メモ
+# CFD サロゲートモデル 作業メモ
 
-Transolver で、形状や気流条件を変えたときの流れ場を予測する作業フォルダです。Transolver 本体のソースやデータセットは含みません。
+CFD の結果を、形状や気流条件から予測するサロゲートモデルの作業フォルダです。これまでの対象は、Transolver による翼まわりの流れ場と表面の量の予測、舵角の違う表面格子の補間です。Transolver 本体のソースやデータセットは含みません。
 
 調査の結論と記録は主題ごとにまとめ、[調査記録の索引](docs/README.md)から辿れます。
 
@@ -8,6 +8,7 @@ Transolver で、形状や気流条件を変えたときの流れ場を予測す
 |---|---|
 | 環境とデータセットの選定 | [docs/setup/feasibility.md](docs/setup/feasibility.md) |
 | AirfRANS の翼面の量の予測 | [docs/surface/conclusions.md](docs/surface/conclusions.md) |
+| 舵角の違う表面格子の補間 | [docs/reports/20261114-fin-remap-su2/README.md](docs/reports/20261114-fin-remap-su2/README.md) |
 
 - `docs/reports/`: 1回ごとの調査の記録（計画、実使用設定、集計CSV、図、再現手順）。
 - `data/`: データセット（AirfRANS など）。ローカル専用。
