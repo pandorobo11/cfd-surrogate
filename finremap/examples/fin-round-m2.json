@@ -1,0 +1,44 @@
+{
+ "name": "fin-round-m2",
+ "output_root": "runs",
+ "geometry": {
+  "root_chord": 1.0,
+  "tip_chord": 0.5,
+  "span": 0.8,
+  "tip_le_x": 0.35,
+  "thickness_ratio": 0.06,
+  "edge_radius_ratio": 0.005,
+  "edge_zone": 0.03,
+  "hinge_x": 0.45
+ },
+ "flow": {"mach": 2.0, "pressure": 101325.0, "temperature": 288.15},
+ "meshes": {
+  "threads": 1,
+  "reference": {"h_fin": 0.012, "h_edge": 0.001, "algo2d": 6},
+  "deflections": [
+   {"deg": 5, "h_fin": 0.013, "h_edge": 0.0011, "algo2d": 6},
+   {"deg": 10, "h_fin": 0.011, "h_edge": 0.0009, "algo2d": 5}
+  ]
+ },
+ "solver": {"iter": 3000, "limiter_iter": 400, "residual_target": -8.0, "cfl": [5.0, 50.0], "volume_output": false},
+ "execution": {
+  "backend": "pbs",
+  "ranks": 8,
+  "su2_cfd": "SU2_CFD",
+  "mpirun": ["mpirun", "-np", "{ranks}"],
+  "python": "python3",
+  "setup": [],
+  "container": {
+   "engine": "podman",
+   "image": "localhost/su2:8.5.0",
+   "options": ["--shm-size=2g", "--security-opt=label=disable"]
+  },
+  "pbs": {
+   "queue": "calc_8p",
+   "resources": ["select=1:ncpus=8:mpiprocs=8"],
+   "job_prefix": "fin",
+   "analysis_queue": null,
+   "analysis_resources": ["select=1:ncpus=1"]
+  }
+ }
+}

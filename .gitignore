@@ -3,6 +3,7 @@
 /results/
 /external/
 /local/
+/runs/
 
 # Secrets, local environment, and OS/editor state
 .env

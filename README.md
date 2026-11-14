@@ -8,7 +8,7 @@ CFD の結果を、形状や気流条件から予測するサロゲートモデ�
 |---|---|
 | 環境とデータセットの選定 | [docs/setup/feasibility.md](docs/setup/feasibility.md) |
 | AirfRANS の翼面の量の予測 | [docs/surface/conclusions.md](docs/surface/conclusions.md) |
-| 舵角の違う表面格子の補間 | [docs/reports/20261114-fin-remap-su2/README.md](docs/reports/20261114-fin-remap-su2/README.md) |
+| 舵角の違う表面格子の補間 | [docs/fin-remap/README.md](docs/fin-remap/README.md)（スクリプトの使い方）、[最初の検証の記録](docs/reports/20261114-fin-remap-su2/README.md) |
 
 - `docs/reports/`: 1回ごとの調査の記録（計画、実使用設定、集計CSV、図、再現手順）。
 - `data/`: データセット（AirfRANS など）。ローカル専用。
