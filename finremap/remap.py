@@ -73,7 +73,7 @@ def map_barycentric(src_points, src_tri, src_values, query, query_normals=None, 
     """最近接点を三角形面上に投影し、重心座標で補間する。
 
     query_normals を渡すと、法線が逆向きの三角形（裏面）を候補から外す。
-    候補は、重心が近い k 個の三角形。戻り値は (補間値, 投影距離)。候補がすべて裏面の点の距離は inf。
+    候補は、重心が近い k 個の三角形。戻り値は (補間値, 投影距離)。候補がすべて裏面の点は、値を NaN、距離を inf にする。
     """
     tree = cKDTree(src_points[src_tri].mean(axis=1))
     fn = face_normals_areas(src_points, src_tri)[0] if query_normals is not None else None
@@ -90,8 +90,10 @@ def map_barycentric(src_points, src_tri, src_values, query, query_normals=None, 
             dist = np.where(back, np.inf, dist)
         best = np.argmin(dist, axis=1)
         rows = np.arange(len(q))
-        values[s:s + chunk] = np.sum(w[rows, best] * src_values[src_tri[cand[rows, best]]], axis=1)
-        dists[s:s + chunk] = dist[rows, best]
+        d = dist[rows, best]
+        values[s:s + chunk] = np.where(np.isfinite(d), np.sum(w[rows, best] * src_values[src_tri[cand[rows, best]]], axis=1),
+                                       np.nan)
+        dists[s:s + chunk] = d
     return values, dists
 
 
@@ -105,7 +107,11 @@ def orient_outward(points, tri, interior):
 
 
 def integrate_forces(points, tri, cp, ref_area, moment_origin):
-    """Cp の面積分による力係数 (3,) とモーメント係数 (3,)。三角形の向きは外向き。基準長は 1。"""
+    """Cp の面積分による力係数 (3,) とモーメント係数 (3,)。三角形の向きは外向き。基準長は 1。
+
+    Cp が NaN の節点を含む三角形は積分から外す。
+    """
+    tri = tri[np.isfinite(cp[tri]).all(axis=1)]
     n, area = face_normals_areas(points, tri)
     f = -cp[tri].mean(axis=1)[:, None] * n * area[:, None] / ref_area
     r = points[tri].mean(axis=1) - np.asarray(moment_origin, float)

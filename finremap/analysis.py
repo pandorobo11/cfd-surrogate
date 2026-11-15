@@ -84,7 +84,7 @@ def analyze_pair(run, plan, pair, plt):
 
     cn_s, ca_s, cm_s = coeffs(src["fin_xyz"], src["tri"], src["cp"])
     cn_r, ca_r, cm_r = coeffs(q, ref["tri"], ref["cp"])
-    rms = lambda v: float(np.sqrt(np.mean(v**2)))
+    rms = lambda v: float(np.sqrt(np.nanmean(v**2)))  # 対応する面が見つからない節点（NaN）は除く
     rows = [dict(pair=label, delta_deg=delta, method="元格子の解（補間前）", CN=cn_s, CA=ca_s, CMy=cm_s,
                  source_nodes=len(src["xyz"]), reference_nodes=len(q), proj_dist_median=float(np.median(dist[found])),
                  proj_dist_max=float(dist[found].max()), unmatched_nodes=int((~found).sum()))]
@@ -96,8 +96,8 @@ def analyze_pair(run, plan, pair, plt):
         row = dict(pair=label, delta_deg=delta, method=name, CN=cn, CA=ca, CMy=cm,
                    CN_change_pct=(cn / cn_s - 1) * 100, CA_change_pct=(ca / ca_s - 1) * 100,
                    CMy_change_pct=(cm / cm_s - 1) * 100, cp_diff_rms=rms(d), cp_diff_rms_edge=rms(d[edge]),
-                   cp_diff_max_edge=float(np.abs(d[edge]).max()), cp_diff_rms_rest=rms(d[~edge]),
-                   cp_diff_max_rest=float(np.abs(d[~edge]).max()))
+                   cp_diff_max_edge=float(np.nanmax(np.abs(d[edge]))), cp_diff_rms_rest=rms(d[~edge]),
+                   cp_diff_max_rest=float(np.nanmax(np.abs(d[~edge]))))
         rows.append(row)
         print(f"{name:<24}{cn:9.5f}{ca:9.5f}{cm:10.5f}{row['cp_diff_rms']:9.4f}{row['cp_diff_rms_edge']:9.4f}"
               f"{row['cp_diff_max_edge']:9.4f}{row['cp_diff_rms_rest']:9.4f}{row['cp_diff_max_rest']:9.4f}")
@@ -148,10 +148,12 @@ def figure(plt, path, geom, plan, pair, src, ref, maps, xi, eta):
         (axes[0, 2], tr_r, mapped, "(3) Mapped onto reference mesh (D)"),
         (axes[0, 3], tr_r, ref["cp"], f"(4) Separate run: reference, AoA {delta:g}"),
     ]:
+        tr.set_mask(~np.isfinite(val)[tr.triangles].all(axis=1))  # NaN の節点を含む三角形は描かない
         im = ax.tripcolor(tr, val, shading="gouraud", cmap="viridis", **lim)
         fig.colorbar(im, ax=ax, label="Cp"); ax.set_title(title)
     for ax, tr, title in [(axes[1, 0], tr_r, "(5) Difference (3) - (4), upper side"),
                           (axes[1, 1], tr_rl, "(6) Same difference, lower side")]:
+        tr.set_mask(~np.isfinite(mapped)[tr.triangles].all(axis=1))
         im = ax.tripcolor(tr, mapped - ref["cp"], shading="gouraud", cmap="RdBu_r", vmin=-0.03, vmax=0.03)
         fig.colorbar(im, ax=ax, label="Cp difference"); ax.set_title(title)
     for ax in list(axes[0, 1:]) + [axes[1, 0], axes[1, 1]]:

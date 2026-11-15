@@ -100,6 +100,19 @@ def test_normal_check_picks_the_right_side_of_a_thin_plate():
     assert remap.map_barycentric(pts, tri, values, q, np.array([[0, 0, 1.0]]))[0][0] == pytest.approx(1.0)
 
 
+def test_point_with_only_back_faces_is_nan_and_left_out_of_forces():
+    pts, tri = grid(6, 6)
+    q = np.array([[0.31, 0.47, 0.0], [0.62, 0.15, 0.0]])
+    qn = np.array([[0, 0, 1.0], [0, 0, -1.0]])  # 2 点目は法線が逆向きなので、どの三角形も裏面になる
+    val, dist = remap.map_barycentric(pts, tri, np.ones(len(pts)), q, qn)
+    assert val[0] == pytest.approx(1.0) and np.isnan(val[1]) and np.isinf(dist[1])
+    cp = np.ones(len(pts))
+    cp[0] = np.nan
+    f, _ = remap.integrate_forces(pts, tri, cp, 1.0, [0.0, 0.0, 0.0])
+    kept = tri[np.isfinite(cp[tri]).all(axis=1)]
+    assert np.all(np.isfinite(f)) and abs(f[2]) == pytest.approx(remap.face_normals_areas(pts, kept)[1].sum())
+
+
 def test_forces_on_a_flat_plate():
     pts, tri = grid(5, 5)
     f, m = remap.integrate_forces(pts, tri, np.ones(len(pts)), 1.0, [0.5, 0.5, 0.0])
