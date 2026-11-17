@@ -16,6 +16,11 @@ def rotate(points, origin, axis, angle_deg):
     return out + np.asarray(origin, float)
 
 
+def rotate_vectors(vectors, axis, angle_deg):
+    """ベクトルの成分を、axis のまわりに angle_deg だけ回す（位置ではないので、軸の通る点には依存しない）。"""
+    return rotate(vectors, [0.0, 0.0, 0.0], axis, angle_deg)
+
+
 def face_normals_areas(points, tri):
     n = np.cross(points[tri[:, 1]] - points[tri[:, 0]], points[tri[:, 2]] - points[tri[:, 0]])
     area = 0.5 * np.linalg.norm(n, axis=1)
@@ -72,13 +77,15 @@ def map_nearest(src_points, src_values, query):
 def map_barycentric(src_points, src_tri, src_values, query, query_normals=None, k=24, chunk=20000):
     """最近接点を三角形面上に投影し、重心座標で補間する。
 
+    src_values は節点ごとのスカラー (N,) か、複数の成分 (N, C)。成分はそれぞれ独立に補間する。
     query_normals を渡すと、法線が逆向きの三角形（裏面）を候補から外す。
     候補は、重心が近い k 個の三角形。戻り値は (補間値, 投影距離)。候補がすべて裏面の点は、値を NaN、距離を inf にする。
     """
+    src_values = np.asarray(src_values, float)
     tree = cKDTree(src_points[src_tri].mean(axis=1))
     fn = face_normals_areas(src_points, src_tri)[0] if query_normals is not None else None
     k = min(k, len(src_tri))
-    values, dists = np.empty(len(query)), np.empty(len(query))
+    values, dists = np.empty((len(query),) + src_values.shape[1:]), np.empty(len(query))
     for s in range(0, len(query), chunk):
         q = query[s:s + chunk]
         cand = tree.query(q, k=k)[1].reshape(len(q), k)
@@ -91,10 +98,16 @@ def map_barycentric(src_points, src_tri, src_values, query, query_normals=None, 
         best = np.argmin(dist, axis=1)
         rows = np.arange(len(q))
         d = dist[rows, best]
-        values[s:s + chunk] = np.where(np.isfinite(d), np.sum(w[rows, best] * src_values[src_tri[cand[rows, best]]], axis=1),
-                                       np.nan)
+        val = np.einsum("nj,nj...->n...", w[rows, best], src_values[src_tri[cand[rows, best]]])
+        val[~np.isfinite(d)] = np.nan
+        values[s:s + chunk] = val
         dists[s:s + chunk] = d
     return values, dists
+
+
+def tangent_project(vectors, normals):
+    """ベクトルから法線方向の成分を除く（normals は単位ベクトル）。"""
+    return vectors - np.sum(vectors * normals, axis=1, keepdims=True) * normals
 
 
 def orient_outward(points, tri, interior):
@@ -114,5 +127,18 @@ def integrate_forces(points, tri, cp, ref_area, moment_origin):
     tri = tri[np.isfinite(cp[tri]).all(axis=1)]
     n, area = face_normals_areas(points, tri)
     f = -cp[tri].mean(axis=1)[:, None] * n * area[:, None] / ref_area
+    r = points[tri].mean(axis=1) - np.asarray(moment_origin, float)
+    return f.sum(axis=0), np.cross(r, f).sum(axis=0)
+
+
+def integrate_friction(points, tri, cf, ref_area, moment_origin):
+    """摩擦係数ベクトル cf (N, 3) の面積分による力係数 (3,) とモーメント係数 (3,)。基準長は 1。
+
+    cf は物体が受ける向きの壁面せん断応力を動圧で割ったもので、points と同じ座標系の成分で渡す。
+    法線は掛けないので、三角形の向きには依存しない。cf が NaN の節点を含む三角形は積分から外す。
+    """
+    tri = tri[np.isfinite(cf[tri]).all(axis=(1, 2))]
+    _, area = face_normals_areas(points, tri)
+    f = cf[tri].mean(axis=1) * area[:, None] / ref_area
     r = points[tri].mean(axis=1) - np.asarray(moment_origin, float)
     return f.sum(axis=0), np.cross(r, f).sum(axis=0)

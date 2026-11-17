@@ -119,6 +119,54 @@ def test_forces_on_a_flat_plate():
     assert np.allclose(f, [0, 0, -1]) and np.allclose(m, 0, atol=1e-12)  # 法線 +z の面に Cp=1
 
 
+def test_barycentric_maps_vector_components():
+    src_p, src_t = grid(9, 7, seed=1)
+    qry_p, _ = grid(13, 11, seed=2)
+    field = lambda p: np.stack([2.0 * p[:, 0] - 3.0 * p[:, 1], 0.5 + p[:, 1], -p[:, 0]], axis=1)
+    val, _ = remap.map_barycentric(src_p, src_t, field(src_p), qry_p)
+    assert val.shape == (len(qry_p), 3) and np.allclose(val, field(qry_p), atol=1e-12)
+    back, dist = remap.map_barycentric(src_p, src_t, field(src_p), qry_p[:2], np.array([[0, 0, 1.0], [0, 0, -1.0]]))
+    assert np.allclose(back[0], field(qry_p[:1])[0]) and np.isnan(back[1]).all() and np.isinf(dist[1])
+
+
+def test_rotated_vector_field_is_recovered():
+    """舵角を付けた面の接線ベクトルは、座標と同じ回転を成分にもかけると、基準の面の値に戻る。"""
+    ref_p, _ = grid(13, 11, seed=2)
+    src_p, src_t = grid(9, 7, seed=1)
+    field = lambda p: np.stack([1.0 + p[:, 1], 0.2 * p[:, 0], np.zeros(len(p))], axis=1)  # z=0 の面の接線ベクトル
+    origin, axis, delta = [0.45, 0.0, 0.0], [0, 1, 0], 10.0
+    moved_p = remap.rotate(src_p, origin, axis, delta)
+    moved_v = remap.rotate_vectors(field(src_p), axis, delta)
+    assert np.allclose(np.linalg.norm(moved_v, axis=1), np.linalg.norm(field(src_p), axis=1))
+    back_p = remap.rotate(moved_p, origin, axis, -delta)
+    good, _ = remap.map_barycentric(back_p, src_t, remap.rotate_vectors(moved_v, axis, -delta), ref_p)
+    bad, _ = remap.map_barycentric(back_p, src_t, moved_v, ref_p)
+    assert np.allclose(good, field(ref_p), atol=1e-12)
+    assert np.abs(bad - field(ref_p))[:, 2].max() > 0.1  # 成分を回さないと、法線方向の成分が残る
+
+
+def test_tangent_project_removes_the_normal_component():
+    rng = np.random.default_rng(3)
+    v, n = rng.normal(size=(30, 3)), rng.normal(size=(30, 3))
+    n /= np.linalg.norm(n, axis=1, keepdims=True)
+    t = remap.tangent_project(v, n)
+    assert np.allclose(np.sum(t * n, axis=1), 0, atol=1e-12) and np.allclose(remap.tangent_project(t, n), t)
+
+
+def test_friction_on_a_flat_plate():
+    pts, tri = grid(5, 5)
+    cf = np.tile([0.01, 0.0, 0.0], (len(pts), 1))
+    f, m = remap.integrate_friction(pts, tri, cf, 0.5, [0.5, 0.5, 0.0])
+    assert np.allclose(f, [0.02, 0, 0]) and np.allclose(m, 0, atol=1e-12)  # 面積 1 に一様な Cf、基準面積 0.5
+    assert np.allclose(remap.integrate_friction(pts, tri[:, [0, 2, 1]], cf, 0.5, [0.5, 0.5, 0.0])[0], f)  # 向きに依存しない
+    f2, m2 = remap.integrate_friction(pts, tri, cf, 1.0, [0.5, 0.0, 0.0])
+    assert np.allclose(m2, [0, 0, -0.005])  # y=0.5 に働く +x 向きの力の、y=0 まわりのモーメント
+    cf[0] = np.nan
+    kept = tri[np.isfinite(cf[tri]).all(axis=(1, 2))]
+    assert remap.integrate_friction(pts, tri, cf, 1.0, [0, 0, 0])[0][0] == pytest.approx(
+        0.01 * remap.face_normals_areas(pts, kept)[1].sum())
+
+
 def two_part_mesh(angle):
     """離れた 2 枚の面。2 枚目だけを軸 (x=2.5, z=0, y 方向) のまわりに angle 回してある。"""
     p1, t1 = grid(4, 4)
@@ -170,6 +218,39 @@ def test_prepare_builds_cases_and_refuses_overwrite(tmp_path):
     assert (run / "scripts" / "finremap" / "workflow.py").exists() and plan["execution"]["container"] is None
     with pytest.raises(ValueError):
         workflow.prepare(tmp_path / "c.json")
+
+
+def test_euler_and_laminar_settings(tmp_path):
+    run = make_run(tmp_path)
+    cfg = (run / "cases" / "d05-a00" / "case.cfg").read_text()
+    assert "SOLVER= EULER" in cfg and "MARKER_EULER= ( fin )" in cfg and "MARKER_HEATFLUX" not in cfg
+    (tmp_path / "v.json").write_text(json.dumps(dict(name="v", flow=dict(reynolds=5000),
+                                                     meshes=dict(deflections=[dict(deg=5)]))))
+    cfg = (workflow.prepare(tmp_path / "v.json", skip_image_check=True) / "cases" / "d05-a00" / "case.cfg").read_text()
+    assert "SOLVER= NAVIER_STOKES" in cfg and "MARKER_HEATFLUX= ( fin, 0.0 )" in cfg and "MARKER_EULER" not in cfg
+    assert "WRT_FORCES_BREAKDOWN= YES" in cfg and "REYNOLDS_NUMBER= 5000" in cfg
+    mu = float(cfg.split("MU_CONSTANT=")[1].split()[0])
+    flow = workflow.DEFAULTS["flow"]
+    rho = flow["pressure"] / (287.058 * flow["temperature"])
+    speed = flow["mach"] * (1.4 * 287.058 * flow["temperature"]) ** 0.5
+    assert rho * speed * 1.0 / mu == pytest.approx(5000, rel=1e-8)
+    (tmp_path / "bad.json").write_text(json.dumps(dict(name="bad", flow=dict(reynolds=-1),
+                                                       meshes=dict(deflections=[dict(deg=5)]))))
+    with pytest.raises(ValueError, match="reynolds"):
+        workflow.prepare(tmp_path / "bad.json")
+
+
+def test_forces_breakdown_is_parsed(tmp_path):
+    (tmp_path / "forces_breakdown.dat").write_text(
+        "Forces breakdown:\n\n"
+        "Total CL:       0.183150 | Pressure (  100%):    0.183623 | Friction (    0%):   -0.000473 | Momentum (    0%):    0.000000\n"
+        "Total CL/CD:    2.511936 | Pressure (  121%):    3.058158 | Friction (   -1%):   -0.036787 | Momentum (    0%):    0.000000\n"
+        "Total CFx:      0.056672 | Pressure (   77%):    0.043811 | Friction (   22%):    0.012860 | Momentum (    0%):    0.000000\n"
+        "\nSurface name: fin\n\n"
+        "Total CFx   (   99%):    9.000000 | Pressure (   77%):    9.000000 | Friction (   22%):    9.000000 | Momentum (    0%):    0.000000\n")
+    bd = workflow.forces_breakdown(tmp_path / "forces_breakdown.dat")
+    assert bd["CFx"] == dict(total=0.056672, pressure=0.043811, friction=0.012860)
+    assert bd["CL"]["friction"] == -0.000473 and set(bd) == {"CL", "CL/CD", "CFx"}
 
 
 def test_unknown_setting_is_rejected(tmp_path):

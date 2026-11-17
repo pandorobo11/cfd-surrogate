@@ -1,4 +1,6 @@
-"""全遊動翼単体の「格子生成 → SU2 Euler 解析 → 表面 Cp の補間と比較」を、設定 JSON 1 つから行う。
+"""全遊動翼単体の「格子生成 → SU2 解析 → 表面 Cp（と摩擦係数 Cf）の補間と比較」を、設定 JSON 1 つから行う。
+
+解析は Euler が既定。設定の flow.reynolds を与えると、層流の Navier-Stokes（断熱壁）になり、Cf も補間する。
 
   python -m finremap.workflow prepare <設定.json>      実行フォルダと各ケースの設定を作る（計算はしない）
   python -m finremap.workflow mesh <実行フォルダ>       格子を生成する（gmsh が必要）
@@ -32,7 +34,7 @@ DEFAULTS = dict(
     geometry=dict(root_chord=1.0, tip_chord=0.5, span=0.8, tip_le_x=0.35, thickness_ratio=0.06,
                   edge_radius_ratio=0.005, edge_zone=0.03, hinge_x=0.45),
     domain=dict(x=[-2.0, 5.0], y_max=3.0, z=[-3.0, 3.0], h_far=0.5),
-    flow=dict(mach=2.0, pressure=101325.0, temperature=288.15),
+    flow=dict(mach=2.0, pressure=101325.0, temperature=288.15, reynolds=None),
     meshes=dict(threads=1, reference=dict(h_fin=0.012, h_edge=0.001, algo2d=6), deflections=[]),
     solver=dict(iter=3000, limiter_iter=400, residual_target=-8.0, cfl=[5.0, 50.0], volume_output=False),
     execution=dict(backend="pbs", ranks=8, su2_cfd="SU2_CFD", mpirun=["mpirun", "-np", "{ranks}"], python="python3",
@@ -92,12 +94,43 @@ def deg_tag(deg):
 
 # ----------------------------------------------------------------------------- prepare
 
+GAMMA, GAS_CONSTANT = 1.4, 287.058
+
+
+def laminar_viscosity(flow, length):
+    """レイノルズ数 flow["reynolds"]（基準長 length）になる一定の粘性係数 [Pa s]。一様流の圧力と温度は変えない。"""
+    density = flow["pressure"] / (GAS_CONSTANT * flow["temperature"])
+    velocity = flow["mach"] * (GAMMA * GAS_CONSTANT * flow["temperature"]) ** 0.5
+    return density * velocity * length / flow["reynolds"]
+
+
+def physics_text(plan):
+    """ソルバーの種類と翼面の境界条件。flow.reynolds がなければ Euler、あれば層流の Navier-Stokes（断熱壁）。"""
+    flow, geo = plan["flow"], plan["geometry"]
+    if flow.get("reynolds") is None:
+        return "SOLVER= EULER\nMARKER_EULER= ( fin )"
+    # 粘性係数を一定にして、一様流の圧力・温度（残差の大きさ）を Euler の計算と同じに保つ
+    return f"""SOLVER= NAVIER_STOKES
+KIND_TURB_MODEL= NONE
+INIT_OPTION= TD_CONDITIONS
+REYNOLDS_NUMBER= {flow['reynolds']}
+REYNOLDS_LENGTH= {geo['root_chord']}
+VISCOSITY_MODEL= CONSTANT_VISCOSITY
+MU_CONSTANT= {laminar_viscosity(flow, geo['root_chord']):.9e}
+CONDUCTIVITY_MODEL= CONSTANT_PRANDTL
+PRANDTL_LAM= 0.72
+MARKER_HEATFLUX= ( fin, 0.0 )
+WRT_FORCES_BREAKDOWN= YES
+BREAKDOWN_FILENAME= forces_breakdown.dat"""
+
+
 def cfg_text(plan, aoa):
     flow, sol, geo = plan["flow"], plan["solver"], plan["geometry"]
     area = 0.5 * (geo["root_chord"] + geo["tip_chord"]) * geo["span"]
     files = "( RESTART, SURFACE_PARAVIEW" + (", PARAVIEW )" if sol["volume_output"] else " )")
-    return f"""% 全遊動翼単体 Euler。翼は対称面 (y=0) に取り付け。舵軸は y 軸に平行で x={geo['hinge_x']}。
-SOLVER= EULER
+    kind = "Euler" if flow.get("reynolds") is None else f"層流 Navier-Stokes（Re={flow['reynolds']:g}、断熱壁）"
+    return f"""% 全遊動翼単体 {kind}。翼は対称面 (y=0) に取り付け。舵軸は y 軸に平行で x={geo['hinge_x']}。
+{physics_text(plan)}
 MATH_PROBLEM= DIRECT
 RESTART_SOL= NO
 MACH_NUMBER= {flow['mach']}
@@ -105,15 +138,14 @@ AOA= {aoa}
 SIDESLIP_ANGLE= 0.0
 FREESTREAM_PRESSURE= {flow['pressure']}
 FREESTREAM_TEMPERATURE= {flow['temperature']}
-GAMMA_VALUE= 1.4
-GAS_CONSTANT= 287.058
+GAMMA_VALUE= {GAMMA}
+GAS_CONSTANT= {GAS_CONSTANT}
 REF_DIMENSIONALIZATION= DIMENSIONAL
 REF_ORIGIN_MOMENT_X= {geo['hinge_x']}
 REF_ORIGIN_MOMENT_Y= 0.0
 REF_ORIGIN_MOMENT_Z= 0.0
 REF_LENGTH= 1.0
 REF_AREA= {area}
-MARKER_EULER= ( fin )
 MARKER_SYM= ( sym )
 MARKER_FAR= ( far )
 MARKER_PLOTTING= ( fin )
@@ -176,6 +208,8 @@ def prepare(config_path, skip_image_check=False):
     name = cfg.get("name", "")
     require(name and all(z.isalnum() or z in "-_." for z in name), "name は英数字と - _ . だけにする")
     require(cfg["meshes"]["deflections"], "meshes.deflections に舵角を 1 つ以上書く")
+    re = cfg["flow"]["reynolds"]
+    require(re is None or (isinstance(re, (int, float)) and re > 0), "flow.reynolds は正の数、または null（Euler）")
     run = (config_path.parent / cfg["output_root"] / name).resolve()
     require(not run.exists(), f"{run} は既にある。上書きしない（name を変えるか、フォルダを移す）")
 
@@ -359,6 +393,22 @@ def last_history(path):
                 CMx=pick("CMx"), CMy=pick("CMy"), CMz=pick("CMz"))
 
 
+def forces_breakdown(path):
+    """SU2 の forces_breakdown.dat から、全体の係数ごとの (合計, 圧力分, 摩擦分) を読む。表面ごとの内訳は読まない。"""
+    out = {}
+    for line in Path(path).read_text().splitlines():
+        if line.startswith("Surface name:"):
+            break
+        cells = [c.strip() for c in line.split("|")]
+        if len(cells) < 3 or not cells[0].startswith("Total C") or ":" not in cells[0]:
+            continue
+        name, total = cells[0][len("Total "):].split(":")
+        parts = {c.split("(")[0].strip().lower(): float(c.rsplit(":", 1)[1]) for c in cells[1:]}
+        if "pressure" in parts and "friction" in parts:
+            out[name.strip()] = dict(total=float(total), pressure=parts["pressure"], friction=parts["friction"])
+    return out
+
+
 def link_mesh(source, target):
     try:
         os.link(source, target)
@@ -415,6 +465,8 @@ def run_case(run, cid):
     else:
         outcome = "converged" if final.get("rms_rho", 0.0) <= plan["solver"]["residual_target"] + 1e-9 else "unconverged"
     record.update(exit_code=rc, wall_s=round(time.time() - t0, 1), final=final, outcome=outcome)
+    if (cwd / "forces_breakdown.dat").exists():  # 粘性計算のときだけ出力させている
+        record["forces_breakdown"] = forces_breakdown(cwd / "forces_breakdown.dat")
     dump(cwd / "run.json", record)
     dump(state_path, dict(status="done", outcome=outcome, exit_code=rc, finished=time.strftime("%Y-%m-%dT%H:%M:%S%z")))
     log(f"{cid}: {outcome}（終了コード {rc}, {record['wall_s']} s, 反復 {final.get('iter')}, "
