@@ -282,3 +282,82 @@ def test_submit_needs_meshes_and_started_case_is_not_rerun(tmp_path):
     (run / "cases" / "d05-a00" / "state.json").write_text('{"status": "running"}')
     with pytest.raises(ValueError, match="既に始まっている"):
         workflow.run_case(run, "d05-a00")
+
+
+def box_surface(n=6):
+    """[-1, 1]^3 の立方体の表面を外向きの三角形に分けた格子。"""
+    pts, tris = [], []
+    u = np.linspace(-1, 1, n)
+    for axis in range(3):
+        for sign in (-1.0, 1.0):
+            a, b = [(axis + 1) % 3, (axis + 2) % 3]
+            U, V = np.meshgrid(u, u, indexing="ij")
+            p = np.zeros((n * n, 3))
+            p[:, axis], p[:, a], p[:, b] = sign, U.ravel(), V.ravel()
+            i = np.arange(n * n).reshape(n, n) + sum(len(x) for x in pts)
+            t = np.concatenate([np.stack([i[:-1, :-1].ravel(), i[1:, :-1].ravel(), i[1:, 1:].ravel()], 1),
+                                np.stack([i[:-1, :-1].ravel(), i[1:, 1:].ravel(), i[:-1, 1:].ravel()], 1)])
+            pts.append(p)
+            tris.append(t if sign > 0 else t[:, [0, 2, 1]])
+    pts, tri = np.concatenate(pts), np.concatenate(tris)
+    key = np.round(pts, 9)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    tri = inv.ravel()[tri]
+    return pts[first], tri
+
+
+def test_centroid_mesh_plane_reproduces_linear_field():
+    pts, tri = grid(12, 10, seed=1)
+    cen, ctri, info = remap.centroid_mesh(pts, tri)
+    assert info["failed_rings"] == 0 and info["cut_edges"] == 0
+    n, area = remap.face_normals_areas(cen, ctri)
+    assert np.all(n[:, 2] > 0)  # 元の三角形と同じ向き
+    # 重なりも隙間もなければ、セル中心の三角形の面積の和は、重心が覆う範囲の面積に一致する
+    from scipy.spatial import ConvexHull
+    assert area.sum() <= ConvexHull(cen[:, :2]).volume + 1e-12
+    lin = lambda p: 2.0 * p[:, 0] - 3.0 * p[:, 1] + 0.5
+    rng = np.random.default_rng(0)
+    q = np.c_[rng.uniform(0.15, 0.85, (200, 2)), np.zeros(200)]
+    val, dist = remap.map_barycentric(cen, ctri, lin(cen), q)
+    assert np.allclose(val, lin(q)) and np.allclose(dist, 0.0)
+
+
+def test_centroid_mesh_box_cuts_feature_edges():
+    pts, tri = box_surface()
+    cen, ctri, info = remap.centroid_mesh(pts, tri, feature_angle_deg=45.0)
+    assert info["failed_rings"] == 0 and info["boundary_edges"] == 0 and info["cut_edges"] == 12 * 5
+    fn, _ = remap.face_normals_areas(pts, tri)
+    # どの三角形も、立方体の 1 つの面の重心だけを結ぶ
+    assert np.all(np.abs(np.einsum("kd,kd->k", fn[ctri[:, 0]], fn[ctri[:, 1]]) - 1) < 1e-9)
+    assert np.all(np.abs(np.einsum("kd,kd->k", fn[ctri[:, 0]], fn[ctri[:, 2]]) - 1) < 1e-9)
+    n, _ = remap.face_normals_areas(cen, ctri)
+    assert np.all(np.einsum("kd,kd->k", n, fn[ctri[:, 0]]) > 0.999)
+    # 特徴線を切らなければ、閉じた面を覆い、どの環も閉じる
+    cen2, ctri2, info2 = remap.centroid_mesh(pts, tri, feature_angle_deg=180.0)
+    assert info2["open_rings"] == 0 and info2["failed_rings"] == 0
+    assert len(ctri2) == 3 * len(tri) - 2 * len(pts)  # 節点ごとに (周りの三角形の数 - 2) 枚
+    ukey = np.sort(np.concatenate([ctri2[:, [0, 1]], ctri2[:, [1, 2]], ctri2[:, [2, 0]]]), axis=1)
+    _, cnt = np.unique(ukey, axis=0, return_counts=True)
+    assert np.all(cnt == 2)  # 閉じた三角形格子（どの辺も 2 枚の三角形が共有する）
+
+
+def test_integrate_forces_cells_matches_nodes():
+    pts, tri = box_surface()
+    cp = pts[:, 0] + 0.3 * pts[:, 2] ** 2
+    f1, m1 = remap.integrate_forces(pts, tri, cp, 1.0, [0, 0, 0])
+    f2, m2 = remap.integrate_forces_cells(pts, tri, remap.cell_values(tri, cp), 1.0, [0, 0, 0])
+    assert np.allclose(f1, f2) and np.allclose(m1, m2)
+
+
+def test_map_cell_values_is_exact_for_linear_fields_including_the_edge_band():
+    src, st = grid(15, 13, seed=2)
+    dst, dt = grid(11, 9, seed=3)
+    lin = lambda p: 1.5 * p[:, 0] - 0.7 * p[:, 1] + 0.2
+    q = dst[dt].mean(axis=1)
+    qn, _ = remap.face_normals_areas(dst, dt)
+    src_cell = remap.cell_values(st, lin(src))  # 線形の場では 3 頂点の平均が面平均
+    val, dist, band = remap.map_cell_values(src, st, src_cell, q, qn)
+    assert band.any() and not band.all()  # 縁に沿った帯だけが外挿になる
+    assert np.allclose(val, lin(q))
+    clamped, _, _ = remap.map_cell_values(src, st, src_cell, q, qn, extrapolate=False)
+    assert np.allclose(clamped[~band], lin(q[~band])) and not np.allclose(clamped[band], lin(q[band]))
