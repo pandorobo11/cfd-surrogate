@@ -1,0 +1,194 @@
+{
+ "pair": {
+  "source": "rot05-a00-nolim",
+  "reference": "ref-a05-nolim",
+  "delta_deg": 5.0
+ },
+ "suffix": "-nolim",
+ "cases": {
+  "rot05-a00-nolim": {
+   "mesh": "rot05",
+   "aoa_deg": 0.0,
+   "outcome": "unconverged",
+   "ranks": 12,
+   "wall_s": 2915.2,
+   "final": {
+    "CL": 0.1655156797,
+    "CD": 0.09872688408,
+    "CMy": -0.005390348576,
+    "CFz": 0.1655156797,
+    "rms_rho": -6.419170062,
+    "iter": 2999
+   },
+   "forces_breakdown": {
+    "CL": {
+     "total": 0.165516,
+     "pressure": 0.168608,
+     "friction": -0.003092
+    },
+    "CD": {
+     "total": 0.098727,
+     "pressure": 0.051147,
+     "friction": 0.04758
+    },
+    "CSF": {
+     "total": -0.01351,
+     "pressure": -0.013678,
+     "friction": 0.000168
+    },
+    "CL/CD": {
+     "total": 1.676501,
+     "pressure": 3.296551,
+     "friction": -0.064985
+    },
+    "CMx": {
+     "total": 0.057476,
+     "pressure": 0.058583,
+     "friction": -0.001108
+    },
+    "CMy": {
+     "total": -0.00539,
+     "pressure": -0.005337,
+     "friction": -5.3e-05
+    },
+    "CMz": {
+     "total": -0.031967,
+     "pressure": -0.013723,
+     "friction": -0.018244
+    },
+    "CFx": {
+     "total": 0.098727,
+     "pressure": 0.051147,
+     "friction": 0.04758
+    },
+    "CFy": {
+     "total": -0.01351,
+     "pressure": -0.013678,
+     "friction": 0.000168
+    },
+    "CFz": {
+     "total": 0.165516,
+     "pressure": 0.168608,
+     "friction": -0.003092
+    }
+   }
+  },
+  "ref-a05-nolim": {
+   "mesh": "ref",
+   "aoa_deg": 5.0,
+   "outcome": "unconverged",
+   "ranks": 12,
+   "wall_s": 3415.2,
+   "final": {
+    "CL": 0.1655156778,
+    "CD": 0.09872726392,
+    "CMy": -0.005390375855,
+    "CFz": 0.1734904887,
+    "rms_rho": -6.177311387,
+    "iter": 2999
+   },
+   "forces_breakdown": {
+    "CL": {
+     "total": 0.165516,
+     "pressure": 0.168608,
+     "friction": -0.003092
+    },
+    "CD": {
+     "total": 0.098727,
+     "pressure": 0.051148,
+     "friction": 0.04758
+    },
+    "CSF": {
+     "total": -0.01351,
+     "pressure": -0.013678,
+     "friction": 0.000167
+    },
+    "CL/CD": {
+     "total": 1.676494,
+     "pressure": 3.296481,
+     "friction": -0.064984
+    },
+    "CMx": {
+     "total": 0.060043,
+     "pressure": 0.059557,
+     "friction": 0.000487
+    },
+    "CMy": {
+     "total": -0.00539,
+     "pressure": -0.005337,
+     "friction": -5.3e-05
+    },
+    "CMz": {
+     "total": -0.026836,
+     "pressure": -0.008565,
+     "friction": -0.018271
+    },
+    "CFx": {
+     "total": 0.083926,
+     "pressure": 0.036258,
+     "friction": 0.047668
+    },
+    "CFy": {
+     "total": -0.01351,
+     "pressure": -0.013678,
+     "friction": 0.000167
+    },
+    "CFz": {
+     "total": 0.17349,
+     "pressure": 0.172424,
+     "friction": 0.001067
+    }
+   }
+  }
+ },
+ "projection_distance_max": 5.812884930182042e-08,
+ "forces_on_ref_surface": {
+  "ref_a05": {
+   "CN": 0.172424,
+   "CA": 0.036258,
+   "CMy": -0.005342,
+   "CA_f": 0.047267
+  },
+  "rot05_a00": {
+   "CN": 0.172424,
+   "CA": 0.036257,
+   "CMy": -0.005342,
+   "CA_f": 0.047267
+  }
+ },
+ "comparisons": {
+  "rot05_a00 vs ref_a05": {
+   "meaning": "座標系だけが違う",
+   "CN_pct": 0.0,
+   "CA_pct": -0.003,
+   "CMy_pct": 0.0,
+   "CA_f_pct": 0.0,
+   "cp_diff_rms": 2e-05,
+   "cf_diff_rms_over_cf_rms_pct": 0.001,
+   "breakdown": {
+    "CN_reference_triangle": 0.17236,
+    "total_pct": 0.0,
+    "upper_pct": -0.001,
+    "lower_pct": 0.001,
+    "xi_pct": {
+     "0.0-0.1": 0.0,
+     "0.1-0.3": 0.0,
+     "0.3-0.7": 0.0,
+     "0.7-0.9": -0.0,
+     "0.9-1.0": 0.0
+    },
+    "eta_pct": {
+     "0.0-0.2": 0.0,
+     "0.2-0.4": 0.0,
+     "0.4-0.6": -0.0,
+     "0.6-0.8": 0.0,
+     "0.8-1.0": 0.0
+    },
+    "mean_dcp_xi_0p3_0p7": {
+     "upper": -0.0,
+     "lower": -0.0
+    }
+   }
+  }
+ }
+}

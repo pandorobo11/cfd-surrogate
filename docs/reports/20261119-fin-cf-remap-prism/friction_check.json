@@ -1,0 +1,192 @@
+{
+ "cases": [
+  {
+   "case": "ref-a05",
+   "wall_nodes": 138453,
+   "max_vtu_match_distance": 4.2043359851777794e-08,
+   "max_wall_speed": 0.0,
+   "cf_recomputed_vs_output_rel_rms": 0.00282,
+   "tau_nn_over_tau_t_rms": 0.02,
+   "nodal_area_ratio_min": 0.7136,
+   "su2_breakdown": {
+    "CMx": 0.000558,
+    "CMy": -8.1e-05,
+    "CMz": -0.018273,
+    "CFx": 0.047525,
+    "CFy": 8.4e-05,
+    "CFz": 0.001183
+   },
+   "tangent_nodal": {
+    "CFx": 0.047505,
+    "CFy": 6.2e-05,
+    "CFz": 0.001137,
+    "CMy": -7.8e-05
+   },
+   "normal_nodal": {
+    "CFx": 2.1e-05,
+    "CFy": 2.2e-05,
+    "CFz": 4.6e-05,
+    "CMy": -2e-06
+   },
+   "total_nodal": {
+    "CFx": 0.047525,
+    "CFy": 8.4e-05,
+    "CFz": 0.001183,
+    "CMy": -8.1e-05
+   },
+   "tangent_nodal_area_sum": {
+    "CFx": 0.04757,
+    "CFy": 7.8e-05,
+    "CFz": 0.001163,
+    "CMy": -8.1e-05
+   },
+   "tangent_triangle": {
+    "CFx": 0.04757,
+    "CFy": 7.8e-05,
+    "CFz": 0.001163,
+    "CMy": -8.1e-05
+   }
+  },
+  {
+   "case": "d05-a00",
+   "wall_nodes": 116493,
+   "max_vtu_match_distance": 4.1942708701448326e-08,
+   "max_wall_speed": 0.0,
+   "cf_recomputed_vs_output_rel_rms": 0.00295,
+   "tau_nn_over_tau_t_rms": 0.019,
+   "nodal_area_ratio_min": 0.7136,
+   "su2_breakdown": {
+    "CMx": -0.000968,
+    "CMy": -0.000102,
+    "CMz": -0.018241,
+    "CFx": 0.047427,
+    "CFy": 7.5e-05,
+    "CFz": -0.002767
+   },
+   "tangent_nodal": {
+    "CFx": 0.047394,
+    "CFy": 5.4e-05,
+    "CFz": -0.003003,
+    "CMy": -7.9e-05
+   },
+   "normal_nodal": {
+    "CFx": 3.4e-05,
+    "CFy": 2.1e-05,
+    "CFz": 0.000236,
+    "CMy": -2.3e-05
+   },
+   "total_nodal": {
+    "CFx": 0.047427,
+    "CFy": 7.5e-05,
+    "CFz": -0.002767,
+    "CMy": -0.000102
+   },
+   "tangent_nodal_area_sum": {
+    "CFx": 0.047464,
+    "CFy": 7.2e-05,
+    "CFz": -0.002982,
+    "CMy": -8.2e-05
+   },
+   "tangent_triangle": {
+    "CFx": 0.047464,
+    "CFy": 7.2e-05,
+    "CFz": -0.002982,
+    "CMy": -8.2e-05
+   }
+  },
+  {
+   "case": "ref-a10",
+   "wall_nodes": 138453,
+   "max_vtu_match_distance": 4.2043359851777794e-08,
+   "max_wall_speed": 0.0,
+   "cf_recomputed_vs_output_rel_rms": 0.00303,
+   "tau_nn_over_tau_t_rms": 0.0229,
+   "nodal_area_ratio_min": 0.7136,
+   "su2_breakdown": {
+    "CMx": 0.001089,
+    "CMy": -0.000145,
+    "CMz": -0.017791,
+    "CFx": 0.046494,
+    "CFy": 0.00079,
+    "CFz": 0.002335
+   },
+   "tangent_nodal": {
+    "CFx": 0.046469,
+    "CFy": 0.00075,
+    "CFz": 0.002245,
+    "CMy": -0.000141
+   },
+   "normal_nodal": {
+    "CFx": 2.5e-05,
+    "CFy": 4e-05,
+    "CFz": 9e-05,
+    "CMy": -4e-06
+   },
+   "total_nodal": {
+    "CFx": 0.046494,
+    "CFy": 0.00079,
+    "CFz": 0.002335,
+    "CMy": -0.000145
+   },
+   "tangent_nodal_area_sum": {
+    "CFx": 0.046534,
+    "CFy": 0.000787,
+    "CFz": 0.002294,
+    "CMy": -0.000146
+   },
+   "tangent_triangle": {
+    "CFx": 0.046533,
+    "CFy": 0.000787,
+    "CFz": 0.002294,
+    "CMy": -0.000146
+   }
+  },
+  {
+   "case": "d10-a00",
+   "wall_nodes": 152718,
+   "max_vtu_match_distance": 4.193791508302412e-08,
+   "max_wall_speed": 0.0,
+   "cf_recomputed_vs_output_rel_rms": 0.00295,
+   "tau_nn_over_tau_t_rms": 0.0232,
+   "nodal_area_ratio_min": 0.7135,
+   "su2_breakdown": {
+    "CMx": -0.001916,
+    "CMy": -0.000182,
+    "CMz": -0.017727,
+    "CFx": 0.046239,
+    "CFy": 0.000802,
+    "CFz": -0.005486
+   },
+   "tangent_nodal": {
+    "CFx": 0.046145,
+    "CFy": 0.000762,
+    "CFz": -0.005849,
+    "CMy": -0.00014
+   },
+   "normal_nodal": {
+    "CFx": 9.5e-05,
+    "CFy": 4e-05,
+    "CFz": 0.000363,
+    "CMy": -4.2e-05
+   },
+   "total_nodal": {
+    "CFx": 0.04624,
+    "CFy": 0.000802,
+    "CFz": -0.005486,
+    "CMy": -0.000181
+   },
+   "tangent_nodal_area_sum": {
+    "CFx": 0.046215,
+    "CFy": 0.000795,
+    "CFz": -0.005811,
+    "CMy": -0.000145
+   },
+   "tangent_triangle": {
+    "CFx": 0.046214,
+    "CFy": 0.000795,
+    "CFz": -0.005811,
+    "CMy": -0.000145
+   }
+  }
+ ]
+}
