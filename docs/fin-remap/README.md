@@ -71,6 +71,7 @@ python3 -m finremap.workflow submit runs/fin-round-m2 --only d05-a00
 | `flow` | `mach`、`pressure`、`temperature`（一様流）。`reynolds`（付け根翼弦基準）を書くと層流の Navier–Stokes になる。既定の `null` は Euler |
 | `meshes.reference` | 基準格子の翼面の格子幅 `h_fin`、縁まわりの格子幅 `h_edge`、Gmsh の 2 次元アルゴリズム `algo2d` |
 | `meshes.deflections` | 舵角 `deg` の一覧。`h_fin`・`h_edge`・`algo2d` を書くと、その舵角だけ基準格子と違う値になる |
+| `meshes.boundary_layer` | 翼面のプリズム層（境界層格子）。既定の `null` は四面体だけの格子。項目は[プリズム層](#プリズム層境界層格子)を参照。`flow.reynolds` があるときだけ使える |
 | `meshes.threads` | 格子生成のスレッド数。既定の 1 では、同じ設定から同じ格子ができる。増やすと速いが、節点数が実行ごとに少し変わる |
 | `solver` | 最大反復数 `iter`、制限関数を固定する反復 `limiter_iter`、収束とみなす密度残差 `residual_target`（常用対数）、CFL の下限と上限 `cfl`、流れ場全体の VTU を出すか `volume_output` |
 | `execution` | `backend`（`pbs` または `local`）、`ranks`（MPI 数）、`su2_cfd`、`mpirun`（`{ranks}` が置き換わる）、`python`、`setup`（ジョブの中で先に実行する行。例：`module load ...`）、`case_time_limit_s`、`container`、`pbs` |
@@ -156,7 +157,7 @@ cp finremap/examples/fin-round-m2-laminar.json my-fin-laminar.json   # flow.reyn
 
 ### 解析の設定
 
-`flow.reynolds` を書くと、各ケースの `case.cfg` が次のように変わる。格子は Euler と同じで、境界層格子は入れない。
+`flow.reynolds` を書くと、各ケースの `case.cfg` が次のように変わる。格子は、`meshes.boundary_layer` を書かなければ Euler と同じ四面体だけの格子で、書くとプリズム層を付ける（[プリズム層](#プリズム層境界層格子)）。
 
 | 項目 | 内容 |
 |---|---|
@@ -168,7 +169,7 @@ cp finremap/examples/fin-round-m2-laminar.json my-fin-laminar.json   # flow.reyn
 
 一様流の圧力と温度は Euler の計算と同じ値のままにしている。密度残差の大きさが変わらないので、`residual_target` をそのまま使える。
 
-レイノルズ数は低くする。境界層を厚くして、境界層格子のない格子でも Cf が滑らかに出るようにするためである。例の 5,000 は、平板の層流境界層の厚さの見積もり（後縁で翼弦の 1 割弱）が翼面の格子幅の数倍になるように選んだ。
+レイノルズ数は低くする。境界層を厚くして、境界層格子のない格子でも Cf が滑らかに出るようにするためである。例の 5,000 は、平板の層流境界層の厚さの見積もり（後縁で翼弦の 1 割弱）が翼面の格子幅の数倍になるように選んだ。ただし、境界層格子のない格子の Cf は、プリズム層を付けた格子の値の半分以下で、格子による差も約 3% と大きかった（[記録](../reports/20261119-fin-cf-remap-prism/README.md)）。Cf の値を使うときはプリズム層を付ける。
 
 ### 結果処理
 
@@ -259,13 +260,44 @@ python3 -m finremap.parts surface_flow.vtu parts.json out.vtu
 
 VTU の読み込み（`finremap/vtu.py`）は、Piece が 1 つのファイルで、ascii・base64・raw appended、非圧縮・zlib 圧縮、ヘッダ型 UInt32・UInt64 に対応する。LZ4・LZMA 圧縮と、複数の Piece には対応していない。
 
+## プリズム層（境界層格子）
+
+2026年11月19日追加。`meshes.boundary_layer` に dict を書くと、翼面の三角形からプリズムの層を押し出し、その外側を四面体で埋めた格子を作る（`finremap/prism.py`）。翼面の三角形格子は、プリズム層のない格子と同じものになる（同じ `h_fin`・`h_edge`・`algo2d` なら同じ節点）。
+
+```sh
+cp finremap/examples/fin-round-m2-laminar-bl.json my-fin-bl.json
+```
+
+| 項目 | 既定値 | 内容 |
+|---|---|---|
+| `layers` | 15 | 層の数 |
+| `ratio` | 1.2 | 層の高さの公比。最初の層の高さは T (ratio − 1) / (ratio^layers − 1) |
+| `thickness_coeff` | 7.0 | 層全体の厚さ T = thickness_coeff √(x ν/U)。x は局所前縁からの距離、ν/U は付け根翼弦 ÷ `flow.reynolds`。平板の層流境界層の厚さ 5√(x ν/U) に、Mach 2 の断熱壁で厚くなる分の余裕を見た値 |
+| `t_min` | 0.003 | T の下限（前縁のまわり） |
+| `t_te` | 0.005 | 後縁での T。後縁から翼弦の `te_zone` の範囲で、T をこの値まで滑らかに減らす。丸い後縁を厚い層で包むと、層の上面の三角形が引き伸ばされるため |
+| `te_zone` | 0.2 | 上の範囲（翼弦比） |
+| `root_blend` | 0.15 | 対称面 (y=0) 上の節点では、押し出す向きの y 成分を 0 にする。翼の付け根からこの距離の範囲で、本来の法線へ滑らかにつなぐ |
+| `smooth_iter` | 30 | 押し出す向きと T の平滑化の回数。翼端の角で向きが急に変わらないようにする |
+
+作り方は次のとおり。
+
+1. 翼面の三角形を流体側へ向け、節点の法線（角度重み）を平滑化して押し出す向きにする。
+2. 節点ごとの T と公比から、各層の節点を置く。各層の三角形が裏返っていないこと、プリズムを 3 つの四面体に分けた体積が正であることを確かめ、`mesh.json` の `prism_stats` に書く。
+3. 層の上面の付け根の輪を穴にした対称面と、遠方境界の 5 面を、Gmsh の組み込みの幾何で 2 次元格子にする。
+4. 層の上面・対称面・遠方境界で閉じた三角形の面の内側を、Gmsh（HXT）で四面体に分ける。格子幅は、四面体だけの格子と同じ「翼面・縁からの距離のしきい値」（Python のコールバック）で決める。
+5. SU2 形式で書く。対称面の境界 `sym` には、三角形と、プリズム層の側面の四角形が入る。要素と境界の向きは、SU2 が並べ替えを報告しない向き（プリズムは VTK の順、境界の法線は流体の側）にしてある。
+
+`mesh.json` には、プリズムと四面体の数、四面体の最小 SICN、`boundary_layer`（使った値）、`prism_stats`（T と最初の層の高さの範囲、品質の指標）が入る。
+
+`mesh` の手順には `numpy`・`scipy`・`gmsh` が要る。SU2 のメモリ（全プロセスの RSS の合計）は、2026-11-19 の実行で 1 節点あたり約 6〜7 KB だった。24 GB の計算機では 3.1M 節点の格子がスワップして大幅に遅くなり、2.6M 節点までは計算できた（[記録](../reports/20261119-fin-cf-remap-prism/README.md#計算時間とメモリ性能の観測)）。
+
 ## 試験
 
 ```sh
-python3 -m pytest tests/test_finremap.py
+python3 -m pytest tests/test_finremap.py tests/test_prism.py
 ```
 
-VTU の読み書き（`vtk` があれば、VTK が書いた各形式のファイルを読めることも確かめる）、回転、補間（スカラーとベクトル）、セル中心の三角形格子とセル値の補間、接平面への射影、圧力と摩擦の力の積分、部位の選択、`prepare`（Euler と層流の設定）とジョブスクリプトの生成、力の内訳の読み込みを確かめる。SU2 と gmsh は使わない。
+VTU の読み書き（`vtk` があれば、VTK が書いた各形式のファイルを読めることも確かめる）、回転、補間（スカラーとベクトル）、セル中心の三角形格子とセル値の補間、接平面への射影、圧力と摩擦の力の積分、部位の選択、`prepare`（Euler と層流の設定）とジョブスクリプトの生成、力の内訳の読み込みを確かめる。SU2 と gmsh は使わない。`tests/test_prism.py` は、付け根の輪の並べ方と層の厚さを確かめ、`gmsh` があれば粗いプリズム層の格子を作って、要素の数・使われない節点がないこと・対称面の要素が y=0 にあることを確かめる。
 
 ## 動作確認（2026-11-14、Mac mini）
 

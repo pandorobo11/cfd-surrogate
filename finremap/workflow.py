@@ -15,6 +15,7 @@ SU2 は、execution.container.image があれば podman のイメージの中で
 1 ケース = 1 ジョブ。全ケースの後に analyze のジョブが走る。始まったケースは自動では再実行しない。
 """
 import argparse
+import copy
 import csv
 import hashlib
 import json
@@ -27,7 +28,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MODULES = ["__init__.py", "workflow.py", "mesh.py", "vtu.py", "remap.py", "analysis.py", "parts.py"]
+MODULES = ["__init__.py", "workflow.py", "mesh.py", "prism.py", "vtu.py", "remap.py", "analysis.py", "parts.py"]
 
 DEFAULTS = dict(
     output_root="runs",
@@ -35,7 +36,7 @@ DEFAULTS = dict(
                   edge_radius_ratio=0.005, edge_zone=0.03, hinge_x=0.45),
     domain=dict(x=[-2.0, 5.0], y_max=3.0, z=[-3.0, 3.0], h_far=0.5),
     flow=dict(mach=2.0, pressure=101325.0, temperature=288.15, reynolds=None),
-    meshes=dict(threads=1, reference=dict(h_fin=0.012, h_edge=0.001, algo2d=6), deflections=[]),
+    meshes=dict(threads=1, reference=dict(h_fin=0.012, h_edge=0.001, algo2d=6), deflections=[], boundary_layer=None),
     solver=dict(iter=3000, limiter_iter=400, residual_target=-8.0, cfl=[5.0, 50.0], volume_output=False),
     execution=dict(backend="pbs", ranks=8, su2_cfd="SU2_CFD", mpirun=["mpirun", "-np", "{ranks}"], python="python3",
                    setup=[], case_time_limit_s=None, local_exclusive=True,
@@ -43,6 +44,10 @@ DEFAULTS = dict(
                    pbs=dict(qsub="qsub", queue=None, resources=["select=1:ncpus=8:mpiprocs=8"], job_prefix="fin",
                             extra_directives=[], analysis_queue=None, analysis_resources=["select=1:ncpus=1"])),
 )
+
+# プリズム層の既定値（prism.py の説明を参照）。meshes.boundary_layer に dict を書くと、この値に上書きして使う
+BL_DEFAULTS = dict(layers=15, ratio=1.2, thickness_coeff=7.0, t_min=0.003, t_te=0.005, te_zone=0.2,
+                   root_blend=0.15, smooth_iter=30)
 
 
 class Cancelled(Exception):
@@ -204,12 +209,17 @@ def container_record(c):
 
 def prepare(config_path, skip_image_check=False):
     config_path = Path(config_path).resolve()
-    cfg = merge(DEFAULTS, load(config_path))
+    cfg = merge(copy.deepcopy(DEFAULTS), load(config_path))  # 下で cfg の中を書き換えるので、既定値を写す
     name = cfg.get("name", "")
     require(name and all(z.isalnum() or z in "-_." for z in name), "name は英数字と - _ . だけにする")
     require(cfg["meshes"]["deflections"], "meshes.deflections に舵角を 1 つ以上書く")
     re = cfg["flow"]["reynolds"]
     require(re is None or (isinstance(re, (int, float)) and re > 0), "flow.reynolds は正の数、または null（Euler）")
+    bl = cfg["meshes"]["boundary_layer"]
+    if bl is not None:
+        require(isinstance(bl, dict), "meshes.boundary_layer は項目の dict、または null（四面体だけ）")
+        require(re is not None, "meshes.boundary_layer は粘性計算（flow.reynolds あり）でだけ使える")
+        bl = merge(BL_DEFAULTS, bl, "meshes.boundary_layer.")
     run = (config_path.parent / cfg["output_root"] / name).resolve()
     require(not run.exists(), f"{run} は既にある。上書きしない（name を変えるか、フォルダを移す）")
 
@@ -225,6 +235,8 @@ def prepare(config_path, skip_image_check=False):
         cases[src] = dict(mesh=f"d{tag}", aoa_deg=0.0, delta_deg=float(d["deg"]))
         order += [ref, src]
         pairs.append(dict(source=src, reference=ref, delta_deg=float(d["deg"])))
+    for m in meshes.values():
+        m["boundary_layer"] = bl
 
     plan = dict(name=name, created=time.strftime("%Y-%m-%dT%H:%M:%S%z"), config=config_path.name,
                 geometry=cfg["geometry"], domain=cfg["domain"], flow=cfg["flow"], solver=cfg["solver"],
@@ -268,10 +280,11 @@ def make_meshes(run):
             continue
         t0 = time.time()
         info = mesh_mod.generate(out, m["delta_deg"], plan["geometry"], plan["domain"], m["h_fin"], m["h_edge"],
-                                 m["algo2d"], plan["mesh_threads"])
+                                 m["algo2d"], plan["mesh_threads"], m.get("boundary_layer"), plan["flow"]["reynolds"])
         info["sha256"] = sha(out / "mesh.su2")
         dump(out / "mesh.json", info)
-        log(f"{mid}: 舵角 {m['delta_deg']:g} deg, 翼面 {info['fin_nodes']} 節点, 全体 {info['nodes']} 節点 "
+        log(f"{mid}: 舵角 {m['delta_deg']:g} deg, 翼面 {info['fin_nodes']} 節点, 全体 {info['nodes']} 節点"
+            + (f"（プリズム {info['prisms']}、四面体 {info['tets']}）" if "prisms" in info else "") + " "
             f"({time.time() - t0:.0f} s)")
 
 
